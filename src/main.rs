@@ -68,12 +68,28 @@ impl VcvRackApp {
         if let Some(texture) = &self.rack_texture {
             let available_size = ui.available_size();
             let aspect_ratio = texture.aspect_ratio();
-            let width = available_size.x.min(800.0);
-            let height = width / aspect_ratio;
+            let rail_width = available_size.x / 8.0;  // Use full window width
+            let rail_height = rail_width / aspect_ratio;
             
-            let image = egui::widgets::Image::new(texture)
-                .fit_to_exact_size(egui::vec2(width, height));
-            ui.add(image);
+            let total_height = rail_height * 4.0;  // Calculate total height needed
+            
+            // Create a scrollable area if needed
+            egui::ScrollArea::both().show(ui, |ui| {
+                // Set minimum size to ensure we use full width
+                ui.set_min_size(egui::vec2(available_size.x, total_height));
+                
+                // Create 4 rows
+                for row in 0..4 {
+                    // Create 8 rails per row
+                    for col in 0..8 {
+                        let image = egui::widgets::Image::new(texture)
+                            .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                        
+                        let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
+                        ui.put(egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height)), image);
+                    }
+                }
+            });
         }
     }
 }
