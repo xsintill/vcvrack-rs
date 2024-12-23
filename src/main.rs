@@ -1,4 +1,5 @@
 use eframe::egui;
+use resvg::usvg::{self};
 
 fn main() {
     let native_options = eframe::NativeOptions {
@@ -22,12 +23,39 @@ fn main() {
 
 struct VcvRackApp {
     fullscreen: bool,
+    rack_texture: Option<egui::TextureHandle>,
 }
 
 impl VcvRackApp {
-    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Load SVG from file
+        let rack_svg = std::fs::read_to_string("res/Rail.svg")
+            .expect("Failed to load Rail.svg");
+
+        // Parse SVG
+        let opt = usvg::Options::default();
+        let tree = usvg::Tree::from_str(&rack_svg, &opt).unwrap();
+        // Convert to pixels
+        let pixmap_size = tree.size();
+        let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width() as u32, pixmap_size.height() as u32)
+            .unwrap();
+        resvg::render(&tree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+        // Convert to egui texture
+        let image = egui::ColorImage::from_rgba_unmultiplied(
+            [pixmap_size.width() as _, pixmap_size.height() as _],
+            pixmap.data()
+        );
+        
+        let texture = cc.egui_ctx.load_texture(
+            "rack",
+            image,
+            egui::TextureOptions::default()
+        );
+
         Self {
             fullscreen: false,
+            rack_texture: Some(texture),
         }
     }
 
@@ -37,68 +65,15 @@ impl VcvRackApp {
     }
 
     fn draw_rack(&self, ui: &mut egui::Ui) {
-        let available_size = ui.available_size();
-        let rack_width = available_size.x.min(800.0); // Maximum width of 800px
-        let hp_width = rack_width / 20.0; // Standard Eurorack width is 20HP
-        let rail_height = 20.0;
-        let rack_height = 400.0; // Adjust as needed
-
-        let painter = ui.painter();
-        
-        // Draw the rack background
-        let rack_rect = egui::Rect::from_min_size(
-            ui.cursor().min,
-            egui::vec2(rack_width, rack_height)
-        );
-        
-        // Background panel
-        painter.rect_filled(
-            rack_rect,
-            0.0,
-            egui::Color32::from_gray(40)
-        );
-
-        // Top rail
-        painter.rect_filled(
-            egui::Rect::from_min_size(
-                rack_rect.min,
-                egui::vec2(rack_width, rail_height)
-            ),
-            0.0,
-            egui::Color32::from_gray(60)
-        );
-
-        // Bottom rail
-        painter.rect_filled(
-            egui::Rect::from_min_size(
-                egui::pos2(rack_rect.min.x, rack_rect.max.y - rail_height),
-                egui::vec2(rack_width, rail_height)
-            ),
-            0.0,
-            egui::Color32::from_gray(60)
-        );
-
-        // Draw mounting holes
-        let hole_radius = 2.0;
-        let hole_margin = 5.0;
-        let holes_per_hp = 2; // Two holes per HP unit
-        
-        for hp in 0..20 { // 20 HP wide
-            let x = rack_rect.min.x + (hp as f32 * hp_width);
+        if let Some(texture) = &self.rack_texture {
+            let available_size = ui.available_size();
+            let aspect_ratio = texture.aspect_ratio();
+            let width = available_size.x.min(800.0);
+            let height = width / aspect_ratio;
             
-            // Top holes
-            painter.circle_filled(
-                egui::pos2(x + hole_margin, rack_rect.min.y + hole_margin),
-                hole_radius,
-                egui::Color32::DARK_GRAY
-            );
-
-            // Bottom holes
-            painter.circle_filled(
-                egui::pos2(x + hole_margin, rack_rect.max.y - hole_margin),
-                hole_radius,
-                egui::Color32::DARK_GRAY
-            );
+            let image = egui::widgets::Image::new(texture)
+                .fit_to_exact_size(egui::vec2(width, height));
+            ui.add(image);
         }
     }
 }
