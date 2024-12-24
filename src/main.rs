@@ -66,26 +66,26 @@ impl VcvRackApp {
 
     fn draw_rack(&self, ui: &mut egui::Ui) {
         if let Some(texture) = &self.rack_texture {
-            // Use the texture's original dimensions
             let rail_width = texture.size_vec2().x;
             let rail_height = texture.size_vec2().y;
             
-            let total_height = rail_height * 4.0;
+            // Total height for 24 rows
+            let total_height = rail_height * 24.0;
             
             egui::ScrollArea::both()
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .vertical_scroll_offset(0.0)
                 .show(ui, |ui| {
-                    // Make scrollbar semi-transparent
                     ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::from_rgba_premultiplied(100, 100, 100, 180);
                     ui.visuals_mut().widgets.active.bg_fill = egui::Color32::from_rgba_premultiplied(120, 120, 120, 180);
                     ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_rgba_premultiplied(140, 140, 140, 180);
                     
-                    // Set minimum size based on the total width of 8 rails and height of 4 rails
-                    ui.set_min_size(egui::vec2(rail_width * 8.0, total_height));
+                    // Set minimum size based on 200 rails width and 24 rows height
+                    ui.set_min_size(egui::vec2(rail_width * 200.0, total_height));
                     
-                    for row in 0..4 {
-                        for col in 0..8 {
+                    // Draw 24 rows with 200 rails each
+                    for row in 0..24 {
+                        for col in 0..200 {
                             let image = egui::widgets::Image::new(texture)
                                 .fit_to_exact_size(egui::vec2(rail_width, rail_height));
                             
