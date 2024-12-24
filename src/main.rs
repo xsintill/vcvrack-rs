@@ -68,28 +68,33 @@ impl VcvRackApp {
         if let Some(texture) = &self.rack_texture {
             let available_size = ui.available_size();
             let aspect_ratio = texture.aspect_ratio();
-            let rail_width = available_size.x / 8.0;  // Use full window width
+            let rail_width = available_size.x / 8.0;
             let rail_height = rail_width / aspect_ratio;
             
-            let total_height = rail_height * 4.0;  // Calculate total height needed
+            let total_height = rail_height * 4.0;
             
-            // Create a scrollable area if needed
-            egui::ScrollArea::both().show(ui, |ui| {
-                // Set minimum size to ensure we use full width
-                ui.set_min_size(egui::vec2(available_size.x, total_height));
-                
-                // Create 4 rows
-                for row in 0..4 {
-                    // Create 8 rails per row
-                    for col in 0..8 {
-                        let image = egui::widgets::Image::new(texture)
-                            .fit_to_exact_size(egui::vec2(rail_width, rail_height));
-                        
-                        let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
-                        ui.put(egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height)), image);
+           
+            egui::ScrollArea::both()
+                .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                .vertical_scroll_offset(0.0)
+                .show(ui, |ui| {
+                    // Make scrollbar semi-transparent
+                    ui.visuals_mut().widgets.inactive.bg_fill = egui::Color32::from_rgba_premultiplied(100, 100, 100, 180);
+                    ui.visuals_mut().widgets.active.bg_fill = egui::Color32::from_rgba_premultiplied(120, 120, 120, 180);
+                    ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_rgba_premultiplied(140, 140, 140, 180);
+                    
+                    ui.set_min_size(egui::vec2(available_size.x, total_height));
+                    
+                    for row in 0..4 {
+                        for col in 0..8 {
+                            let image = egui::widgets::Image::new(texture)
+                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                            
+                            let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
+                            ui.put(egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height)), image);
+                        }
                     }
-                }
-            });
+                });
         }
     }
 }
