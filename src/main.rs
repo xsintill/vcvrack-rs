@@ -66,14 +66,12 @@ impl VcvRackApp {
 
     fn draw_rack(&self, ui: &mut egui::Ui) {
         if let Some(texture) = &self.rack_texture {
-            let available_size = ui.available_size();
-            let aspect_ratio = texture.aspect_ratio();
-            let rail_width = available_size.x / 8.0;
-            let rail_height = rail_width / aspect_ratio;
+            // Use the texture's original dimensions
+            let rail_width = texture.size_vec2().x;
+            let rail_height = texture.size_vec2().y;
             
             let total_height = rail_height * 4.0;
             
-           
             egui::ScrollArea::both()
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .vertical_scroll_offset(0.0)
@@ -83,7 +81,8 @@ impl VcvRackApp {
                     ui.visuals_mut().widgets.active.bg_fill = egui::Color32::from_rgba_premultiplied(120, 120, 120, 180);
                     ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_rgba_premultiplied(140, 140, 140, 180);
                     
-                    ui.set_min_size(egui::vec2(available_size.x, total_height));
+                    // Set minimum size based on the total width of 8 rails and height of 4 rails
+                    ui.set_min_size(egui::vec2(rail_width * 8.0, total_height));
                     
                     for row in 0..4 {
                         for col in 0..8 {
