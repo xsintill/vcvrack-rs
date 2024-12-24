@@ -24,6 +24,7 @@ fn main() {
 struct VcvRackApp {
     fullscreen: bool,
     rack_texture: Option<egui::TextureHandle>,
+    zoom_level: f32,
 }
 
 impl VcvRackApp {
@@ -56,6 +57,7 @@ impl VcvRackApp {
         Self {
             fullscreen: false,
             rack_texture: Some(texture),
+            zoom_level: 1.0,
         }
     }
 
@@ -64,13 +66,29 @@ impl VcvRackApp {
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen));
     }
 
-    fn draw_rack(&self, ui: &mut egui::Ui) {
+    fn draw_rack(&mut self, ui: &mut egui::Ui) {
         if let Some(texture) = &self.rack_texture {
-            let rail_width = texture.size_vec2().x;
-            let rail_height = texture.size_vec2().y;
+            let rail_width = texture.size_vec2().x * self.zoom_level;
+            let rail_height = texture.size_vec2().y * self.zoom_level;
             
-            // Total height for 24 rows
             let total_height = rail_height * 24.0;
+            
+            if ui.input(|i| i.modifiers.ctrl) {
+                if ui.input(|i| i.key_pressed(egui::Key::Plus)) {
+                    self.zoom_level = (self.zoom_level * 1.1).min(5.0);
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::Minus)) {
+                    self.zoom_level = (self.zoom_level / 1.1).max(0.1);
+                }
+            }
+            
+            if ui.input(|i| i.modifiers.ctrl) {
+                let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
+                if scroll_delta != 0.0 {
+                    let zoom_delta = if scroll_delta > 0.0 { 1.1 } else { 1.0 / 1.1 };
+                    self.zoom_level = (self.zoom_level * zoom_delta).clamp(0.1, 5.0);
+                }
+            }
             
             egui::ScrollArea::both()
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
@@ -80,10 +98,8 @@ impl VcvRackApp {
                     ui.visuals_mut().widgets.active.bg_fill = egui::Color32::from_rgba_premultiplied(120, 120, 120, 180);
                     ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_rgba_premultiplied(140, 140, 140, 180);
                     
-                    // Set minimum size based on 200 rails width and 24 rows height
                     ui.set_min_size(egui::vec2(rail_width * 200.0, total_height));
                     
-                    // Draw 24 rows with 200 rails each
                     for row in 0..24 {
                         for col in 0..200 {
                             let image = egui::widgets::Image::new(texture)
