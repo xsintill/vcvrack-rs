@@ -66,6 +66,78 @@ impl VcvRackApp {
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen));
     }
 
+    fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        egui::menu::bar(ui, |ui| {
+            ui.menu_button("File", |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
+                    if ui.add(egui::Button::new("Exit").shortcut_text("Ctrl+Q")).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                });
+            });
+            
+            ui.menu_button("View", |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
+                    let rect = egui::Rect::from_min_size(
+                        ui.cursor().min,
+                        egui::vec2(200.0, 16.0)
+                    );
+                    
+                    let painter = ui.painter();
+                    
+                    // Background bar border
+                    painter.rect(
+                        rect,
+                        2.0,
+                        egui::Color32::from_rgb(160, 180, 255),
+                        egui::Stroke::new(1.0, egui::Color32::from_rgb(140, 160, 235))
+                    );
+                    
+                    // Progress bar
+                    let progress_rect = egui::Rect::from_min_max(
+                        rect.min,
+                        egui::pos2(
+                            rect.min.x + rect.width() * (self.zoom_level * 100.0) / 500.0,
+                            rect.max.y
+                        ),
+                    );
+                    
+                    painter.rect(
+                        progress_rect,
+                        2.0,
+                        egui::Color32::from_rgb(100, 149, 237),
+                        egui::Stroke::NONE
+                    );
+                    
+                    // Centered text
+                    let text = format!("{:.0}%", self.zoom_level * 100.0);
+                    painter.text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        text,
+                        egui::FontId::proportional(14.0),
+                        egui::Color32::WHITE,
+                    );
+
+                    ui.advance_cursor_after_rect(rect);
+                });
+                ui.separator();
+                
+                if ui.add(egui::Button::new("Zoom In").shortcut_text("Ctrl++")).clicked() {
+                    self.zoom_level = (self.zoom_level * 1.1).min(5.0);
+                }
+                if ui.add(egui::Button::new("Zoom Out").shortcut_text("Ctrl+-")).clicked() {
+                    self.zoom_level = (self.zoom_level / 1.1).max(0.1);
+                }
+                ui.separator();
+                
+                if ui.add(egui::Button::new("Fullscreen").shortcut_text("F11")).clicked() {
+                    self.toggle_fullscreen(ctx);
+                }
+            });
+        });
+    }
+
     fn draw_rack(&mut self, ui: &mut egui::Ui) {
         if let Some(texture) = &self.rack_texture {
             let rail_width = texture.size_vec2().x * self.zoom_level;
@@ -128,34 +200,12 @@ impl eframe::App for VcvRackApp {
             
             if menu_area.contains(ctx.pointer_hover_pos().unwrap_or_default()) {
                 egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-                    egui::menu::bar(ui, |ui| {
-                        ui.menu_button("File", |ui| {
-                            if ui.button("Exit").clicked() {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                            }
-                        });                       
-                        ui.menu_button("View", |ui| {
-                            if ui.button(format!("Fullscreen\t{}", "F11")).clicked() {
-                                self.toggle_fullscreen(ctx);
-                            }
-                        });
-                    });
+                    self.update_menu(ctx, ui);
                 });
             }
         } else {
             egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-                egui::menu::bar(ui, |ui| {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Exit").clicked() {
-                          ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                    ui.menu_button("View", |ui| {
-                        if ui.button(format!("Fullscreen\t{}", "F11")).clicked() {
-                            self.toggle_fullscreen(ctx);
-                        }
-                    });
-                });
+                self.update_menu(ctx, ui);
             });
         }
 
