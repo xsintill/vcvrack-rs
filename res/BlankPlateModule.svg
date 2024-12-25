@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="304px" height="380px">
+    <!-- Assuming the Rail.svg is 380 pixels tall and we want 10 to fit side by side -->
+    <!-- The width would be 100 pixels per rail, totaling 1000 pixels -->
+    <rect width="30.4" height="380" fill="#3333ff"/>
+</svg>
