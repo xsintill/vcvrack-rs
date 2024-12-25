@@ -123,6 +123,9 @@ impl VcvRackApp {
                 });
                 ui.separator();
                 
+                if ui.add(egui::Button::new("Zoom to 100%")).clicked() {
+                    self.zoom_level = 1.0;
+                }
                 if ui.add(egui::Button::new("Zoom In").shortcut_text("Ctrl++")).clicked() {
                     self.zoom_level = (self.zoom_level * 1.1).min(5.0);
                 }
