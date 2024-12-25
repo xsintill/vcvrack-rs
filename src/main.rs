@@ -21,43 +21,75 @@ fn main() {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ModulePlacement {
+    row: usize,
+    col: f32,
+}
+
 struct VcvRackApp {
     fullscreen: bool,
     rack_texture: Option<egui::TextureHandle>,
+    blank_plate_texture: Option<egui::TextureHandle>,
     zoom_level: f32,
+    placed_modules: Vec<egui::Pos2>,
 }
 
 impl VcvRackApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Load SVG from file
+        // Load Rail SVG
         let rack_svg = std::fs::read_to_string("res/Rail.svg")
             .expect("Failed to load Rail.svg");
 
-        // Parse SVG
+        // Parse Rail SVG
         let opt = usvg::Options::default();
         let tree = usvg::Tree::from_str(&rack_svg, &opt).unwrap();
-        // Convert to pixels
         let pixmap_size = tree.size();
         let mut pixmap = tiny_skia::Pixmap::new(pixmap_size.width() as u32, pixmap_size.height() as u32)
             .unwrap();
         resvg::render(&tree, usvg::Transform::default(), &mut pixmap.as_mut());
 
-        // Convert to egui texture
-        let image = egui::ColorImage::from_rgba_unmultiplied(
+        let rack_image = egui::ColorImage::from_rgba_unmultiplied(
             [pixmap_size.width() as _, pixmap_size.height() as _],
             pixmap.data()
         );
         
-        let texture = cc.egui_ctx.load_texture(
+        let rack_texture = cc.egui_ctx.load_texture(
             "rack",
-            image,
+            rack_image,
+            egui::TextureOptions::default()
+        );
+
+        // Load BlankPlate SVG
+        let blank_plate_svg = std::fs::read_to_string("res/BlankPlateModule.svg")
+            .expect("Failed to load BlankPlateModule.svg");
+
+        // Parse BlankPlate SVG
+        let blank_plate_tree = usvg::Tree::from_str(&blank_plate_svg, &opt).unwrap();
+        let blank_plate_size = blank_plate_tree.size();
+        let mut blank_plate_pixmap = tiny_skia::Pixmap::new(
+            blank_plate_size.width() as u32, 
+            blank_plate_size.height() as u32
+        ).unwrap();
+        resvg::render(&blank_plate_tree, usvg::Transform::default(), &mut blank_plate_pixmap.as_mut());
+
+        let blank_plate_image = egui::ColorImage::from_rgba_unmultiplied(
+            [blank_plate_size.width() as _, blank_plate_size.height() as _],
+            blank_plate_pixmap.data()
+        );
+        
+        let blank_plate_texture = cc.egui_ctx.load_texture(
+            "blank_plate",
+            blank_plate_image,
             egui::TextureOptions::default()
         );
 
         Self {
             fullscreen: false,
-            rack_texture: Some(texture),
+            rack_texture: Some(rack_texture),
+            blank_plate_texture: Some(blank_plate_texture),
             zoom_level: 1.0,
+            placed_modules: Vec::new(),
         }
     }
 
@@ -174,14 +206,58 @@ impl VcvRackApp {
                     ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_rgba_premultiplied(140, 140, 140, 180);
                     
                     ui.set_min_size(egui::vec2(rail_width * 200.0, total_height));
-                    
-                    for row in 0..24 {
-                        for col in 0..200 {
-                            let image = egui::widgets::Image::new(texture)
-                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+
+                    if let Some(blank_plate_texture) = &self.blank_plate_texture {
+                        for row in 0..24 {
+                            for col in 0..200 {
+                                let image = egui::widgets::Image::new(texture)
+                                    .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                                 
+                                let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
+                                let rail_rect = egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height));
+
+                                // First render the rail
+                                ui.put(rail_rect, image.clone());
+
+                                // Render any previously placed modules at this position
+                                for &module_pos in &self.placed_modules {
+                                    let module_image = egui::widgets::Image::new(blank_plate_texture)
+                                        .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                                    ui.put(
+                                        egui::Rect::from_min_size(module_pos, egui::vec2(rail_width, rail_height)),
+                                        module_image
+                                    );
+                                }
+
+                                // Then handle module placement on click
+                                if ui.rect_contains_pointer(rail_rect) && ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
+                                    if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                                        // Calculate the grid position based on the actual click position
+                                        let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
+                                        let module_pos = egui::pos2(grid_x, pos.y);
+                                        
+                                        // Only add if there isn't already a module at this position
+                                        let already_placed = self.placed_modules.iter().any(|&existing_pos| {
+                                            (existing_pos.x - module_pos.x).abs() < 1.0 && 
+                                            (existing_pos.y - module_pos.y).abs() < 1.0
+                                        });
+
+                                        if !already_placed {
+                                            // Store the new module position
+                                            self.placed_modules.push(module_pos);
+                                            
+                                            // Place the module at the exact same height as the rail
+                                            let module_image = egui::widgets::Image::new(blank_plate_texture)
+                                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                                            ui.put(
+                                                egui::Rect::from_min_size(module_pos, egui::vec2(rail_width, rail_height)), 
+                                                module_image
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                             
-                            let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
-                            ui.put(egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height)), image);
                         }
                     }
                 });
@@ -216,4 +292,4 @@ impl eframe::App for VcvRackApp {
             self.draw_rack(ui);
         });
     }
-} 
+}
