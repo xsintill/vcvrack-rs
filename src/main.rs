@@ -207,57 +207,49 @@ impl VcvRackApp {
                     
                     ui.set_min_size(egui::vec2(rail_width * 200.0, total_height));
 
-                    if let Some(blank_plate_texture) = &self.blank_plate_texture {
-                        for row in 0..24 {
-                            for col in 0..200 {
-                                let image = egui::widgets::Image::new(texture)
-                                    .fit_to_exact_size(egui::vec2(rail_width, rail_height));
-                                 
-                                let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
-                                let rail_rect = egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height));
+                    // First render all rails
+                    for row in 0..24 {
+                        for col in 0..200 {
+                            let image = egui::widgets::Image::new(texture)
+                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                             
+                            let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
+                            let rail_rect = egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height));
 
-                                // First render the rail
-                                ui.put(rail_rect, image.clone());
+                            // Render the rail
+                            ui.put(rail_rect, image.clone());
 
-                                // Render any previously placed modules at this position
-                                for &module_pos in &self.placed_modules {
-                                    let module_image = egui::widgets::Image::new(blank_plate_texture)
-                                        .fit_to_exact_size(egui::vec2(rail_width, rail_height));
-                                    ui.put(
-                                        egui::Rect::from_min_size(module_pos, egui::vec2(rail_width, rail_height)),
-                                        module_image
-                                    );
-                                }
+                            // Handle module placement on click
+                            if ui.rect_contains_pointer(rail_rect) && ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
+                                if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                                    // Calculate the grid position based on the actual click position
+                                    let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
+                                    let module_pos = egui::pos2(grid_x, pos.y);
+                                    
+                                    // Only add if there isn't already a module at this position
+                                    let already_placed = self.placed_modules.iter().any(|&existing_pos| {
+                                        (existing_pos.x - module_pos.x).abs() < 1.0 && 
+                                        (existing_pos.y - module_pos.y).abs() < 1.0
+                                    });
 
-                                // Then handle module placement on click
-                                if ui.rect_contains_pointer(rail_rect) && ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
-                                    if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
-                                        // Calculate the grid position based on the actual click position
-                                        let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
-                                        let module_pos = egui::pos2(grid_x, pos.y);
-                                        
-                                        // Only add if there isn't already a module at this position
-                                        let already_placed = self.placed_modules.iter().any(|&existing_pos| {
-                                            (existing_pos.x - module_pos.x).abs() < 1.0 && 
-                                            (existing_pos.y - module_pos.y).abs() < 1.0
-                                        });
-
-                                        if !already_placed {
-                                            // Store the new module position
-                                            self.placed_modules.push(module_pos);
-                                            
-                                            // Place the module at the exact same height as the rail
-                                            let module_image = egui::widgets::Image::new(blank_plate_texture)
-                                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
-                                            ui.put(
-                                                egui::Rect::from_min_size(module_pos, egui::vec2(rail_width, rail_height)), 
-                                                module_image
-                                            );
-                                        }
+                                    if !already_placed {
+                                        // Store the new module position
+                                        self.placed_modules.push(module_pos);
                                     }
                                 }
                             }
-                            
+                        }
+                    }
+
+                    // Then render all placed modules in one pass
+                    if let Some(blank_plate_texture) = &self.blank_plate_texture {
+                        for &module_pos in &self.placed_modules {
+                            let module_image = egui::widgets::Image::new(blank_plate_texture)
+                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
+                            ui.put(
+                                egui::Rect::from_min_size(module_pos, egui::vec2(rail_width, rail_height)),
+                                module_image
+                            );
                         }
                     }
                 });
