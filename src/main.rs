@@ -1,6 +1,9 @@
 use eframe::egui;
 use resvg::usvg::{self};
 
+#[cfg(test)]
+mod tests;
+
 fn main() {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -21,18 +24,12 @@ fn main() {
     }
 }
 
-#[derive(Debug, Clone)]
-struct ModulePlacement {
-    row: usize,
-    col: f32,
-}
-
 struct VcvRackApp {
     fullscreen: bool,
     rack_texture: Option<egui::TextureHandle>,
-    blank_plate_texture: Option<egui::TextureHandle>,
+    blank_plate_plugin_texture: Option<egui::TextureHandle>,
     zoom_level: f32,
-    placed_modules: Vec<egui::Pos2>,
+    placed_plugins: Vec<egui::Pos2>,
 }
 
 impl VcvRackApp {
@@ -61,8 +58,8 @@ impl VcvRackApp {
         );
 
         // Load BlankPlate SVG
-        let blank_plate_svg = std::fs::read_to_string("res/BlankPlateModule.svg")
-            .expect("Failed to load BlankPlateModule.svg");
+        let blank_plate_svg = std::fs::read_to_string("res/BlankPlatePlugin.svg")
+            .expect("Failed to load BlankPlatePlugin.svg");
 
         // Parse BlankPlate SVG
         let blank_plate_tree = usvg::Tree::from_str(&blank_plate_svg, &opt).unwrap();
@@ -78,8 +75,8 @@ impl VcvRackApp {
             blank_plate_pixmap.data()
         );
         
-        let blank_plate_texture = cc.egui_ctx.load_texture(
-            "blank_plate",
+        let blank_plate_plugin_texture = cc.egui_ctx.load_texture(
+            "blank_plate_plugin",
             blank_plate_image,
             egui::TextureOptions::default()
         );
@@ -87,9 +84,9 @@ impl VcvRackApp {
         Self {
             fullscreen: false,
             rack_texture: Some(rack_texture),
-            blank_plate_texture: Some(blank_plate_texture),
+            blank_plate_plugin_texture: Some(blank_plate_plugin_texture),
             zoom_level: 1.0,
-            placed_modules: Vec::new(),
+            placed_plugins: Vec::new(),
         }
     }
 
@@ -219,36 +216,36 @@ impl VcvRackApp {
                             // Render the rail
                             ui.put(rail_rect, image.clone());
 
-                            // Handle module placement on click
+                            // Handle plugin placement on click
                             if ui.rect_contains_pointer(rail_rect) && ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
                                 if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
                                     // Calculate the grid position based on the actual click position
                                     let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
-                                    let module_pos = egui::pos2(grid_x, pos.y);
+                                    let plugin_pos = egui::pos2(grid_x, pos.y);
                                     
-                                    // Only add if there isn't already a module at this position
-                                    let already_placed = self.placed_modules.iter().any(|&existing_pos| {
-                                        (existing_pos.x - module_pos.x).abs() < 1.0 && 
-                                        (existing_pos.y - module_pos.y).abs() < 1.0
+                                    // Only add if there isn't already a plugin at this position
+                                    let already_placed = self.placed_plugins.iter().any(|&existing_pos| {
+                                        (existing_pos.x - plugin_pos.x).abs() < 1.0 && 
+                                        (existing_pos.y - plugin_pos.y).abs() < 1.0
                                     });
 
                                     if !already_placed {
-                                        // Store the new module position
-                                        self.placed_modules.push(module_pos);
+                                        // Store the new plugin position
+                                        self.placed_plugins.push(plugin_pos);
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Then render all placed modules in one pass
-                    if let Some(blank_plate_texture) = &self.blank_plate_texture {
-                        for &module_pos in &self.placed_modules {
-                            let module_image = egui::widgets::Image::new(blank_plate_texture)
+                    // Then render all placed plugins in one pass
+                    if let Some(blank_plate_plugin_texture) = &self.blank_plate_plugin_texture {
+                        for &plugin_pos in &self.placed_plugins {
+                            let plugin_image = egui::widgets::Image::new(blank_plate_plugin_texture)
                                 .fit_to_exact_size(egui::vec2(rail_width, rail_height));
                             ui.put(
-                                egui::Rect::from_min_size(module_pos, egui::vec2(rail_width, rail_height)),
-                                module_image
+                                egui::Rect::from_min_size(plugin_pos, egui::vec2(rail_width, rail_height)),
+                                plugin_image
                             );
                         }
                     }
