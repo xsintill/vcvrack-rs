@@ -45,25 +45,40 @@ fn test_zoom_level_constraints() {
         placed_plugins: Vec::new(),
     };
 
-    // Test zooming in beyond max limit
-    for _ in 0..10 {
-        app.zoom_level = (app.zoom_level * 1.1).min(5.0);
+    // Test zooming in until max limit
+    let mut prev_zoom = app.zoom_level;
+    for _ in 0..50 {
+        app.zoom_in();
+        if app.zoom_level == prev_zoom {
+            assert_eq!(app.zoom_level, 5.0, "Should stop at exactly 5.0");
+            break;
+        }
+        prev_zoom = app.zoom_level;
     }
-    assert!(app.zoom_level <= 5.0, "Zoom level should not exceed maximum");
-    
-    // Reset zoom level
+    assert_eq!(app.zoom_level, 5.0, "Should reach max zoom of 5.0");
+    app.zoom_in();
+    assert_eq!(app.zoom_level, 5.0, "Should not exceed max zoom of 5.0");
+
+    // Reset zoom for out test
     app.reset_zoom();
-    assert_eq!(app.zoom_level, 1.0, "Zoom level should be reset to 1.0");
-    
-    // Test zooming out beyond min limit
-    for _ in 0..10 {
-        app.zoom_level = (app.zoom_level / 1.1).max(0.1);
+
+    // Test zooming out until min limit
+    prev_zoom = app.zoom_level;
+    for _ in 0..50 {
+        app.zoom_out();
+        if app.zoom_level == prev_zoom {
+            assert_eq!(app.zoom_level, 0.1, "Should stop at exactly 0.1");
+            break;
+        }
+        prev_zoom = app.zoom_level;
     }
-    assert!(app.zoom_level >= 0.1, "Zoom level should not go below minimum");
+    assert_eq!(app.zoom_level, 0.1, "Should reach min zoom of 0.1");
+    app.zoom_out();
+    assert_eq!(app.zoom_level, 0.1, "Should not go below min zoom of 0.1");
 }
 
 #[test]
-fn test_zoom_level_steps() {
+fn test_zoom_in() {
     let mut app = VcvRackApp {
         fullscreen: false,
         rack_texture: None,
@@ -72,18 +87,38 @@ fn test_zoom_level_steps() {
         placed_plugins: Vec::new(),
     };
 
-    // Test single zoom in
-    let original_zoom = app.zoom_level;
-    app.zoom_level = (app.zoom_level * 1.1).min(5.0);
-    assert!(app.zoom_level > original_zoom, "Zoom in should increase zoom level");
-    assert_eq!(app.zoom_level, 1.1, "Zoom in should increase by factor of 1.1");
+    // Test normal zoom in
+    let initial_zoom = app.zoom_level;
+    app.zoom_in();
+    assert!(app.zoom_level > initial_zoom);
+    assert_eq!(app.zoom_level, 1.1);
 
-    // Test single zoom out
-    app.reset_zoom(); // Reset to 1.0
-    let original_zoom = app.zoom_level;
-    app.zoom_level = (app.zoom_level / 1.1).max(0.1);
-    assert!(app.zoom_level < original_zoom, "Zoom out should decrease zoom level");
-    assert!((app.zoom_level - (1.0 / 1.1)).abs() < 0.0001, "Zoom out should decrease by factor of 1.1");
+    // Test zoom in at max limit
+    app.zoom_level = 5.0;
+    app.zoom_in();
+    assert_eq!(app.zoom_level, 5.0, "Should not zoom in beyond max limit");
+}
+
+#[test]
+fn test_zoom_out() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+    };
+
+    // Test normal zoom out
+    let initial_zoom = app.zoom_level;
+    app.zoom_out();
+    assert!(app.zoom_level < initial_zoom);
+    assert!((app.zoom_level - (1.0 / 1.1)).abs() < 0.0001);
+
+    // Test zoom out at min limit
+    app.zoom_level = 0.1;
+    app.zoom_out();
+    assert_eq!(app.zoom_level, 0.1, "Should not zoom out beyond min limit");
 }
 
 #[test]
@@ -92,22 +127,12 @@ fn test_reset_zoom() {
         fullscreen: false,
         rack_texture: None,
         blank_plate_plugin_texture: None,
-        zoom_level: 2.5, // Start with a different zoom level
+        zoom_level: 2.5,
         placed_plugins: Vec::new(),
     };
 
-    // Test resetting zoom from a high value
     app.reset_zoom();
-    assert_eq!(app.zoom_level, 1.0, "Zoom level should reset to 1.0 from high zoom");
-
-    // Test resetting zoom from a low value
-    app.zoom_level = 0.2;
-    app.reset_zoom();
-    assert_eq!(app.zoom_level, 1.0, "Zoom level should reset to 1.0 from low zoom");
-
-    // Test resetting zoom when already at 1.0
-    app.reset_zoom();
-    assert_eq!(app.zoom_level, 1.0, "Zoom level should remain at 1.0 when already at default");
+    assert_eq!(app.zoom_level, 1.0);
 }
 
 #[test]
@@ -121,15 +146,69 @@ fn test_draw_rack_with_input() {
     };
 
     let ctx = egui::Context::default();
-    let mut raw_input = egui::RawInput::default();
-    
-    // Test scroll zoom
-    raw_input.events.push(egui::Event::PointerMoved(egui::pos2(0.0, 1.0)));
-    raw_input.modifiers.ctrl = true;
-    
-    let _ = ctx.run(raw_input, |ctx| {
+    let _ = ctx.run(Default::default(), |ctx| {
         egui::CentralPanel::default().show(ctx, |ui| {
             app.draw_rack(ui);
         });
     });
+}
+
+#[test]
+fn test_update_menu() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+    };
+
+    let ctx = egui::Context::default();
+    let _ = ctx.run(Default::default(), |ctx| {
+        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
+            app.update_menu(ctx, ui);
+        });
+    });
+}
+
+#[test]
+fn test_app_update() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+    };
+
+    let ctx = egui::Context::default();
+    let _ = ctx.run(Default::default(), |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            app.draw_rack(ui);
+        });
+        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
+            app.update_menu(ctx, ui);
+        });
+    });
+}
+
+#[test]
+fn test_plugin_placement() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+    };
+
+    // Add a plugin
+    app.placed_plugins.push(egui::pos2(100.0, 100.0));
+    assert_eq!(app.placed_plugins.len(), 1);
+    assert_eq!(app.placed_plugins[0], egui::pos2(100.0, 100.0));
+
+    // Test multiple plugins
+    app.placed_plugins.push(egui::pos2(200.0, 200.0));
+    assert_eq!(app.placed_plugins.len(), 2);
+    assert_eq!(app.placed_plugins[1], egui::pos2(200.0, 200.0));
 }

@@ -99,6 +99,22 @@ impl VcvRackApp {
         self.zoom_level = 1.0;
     }
 
+    pub fn zoom_in(&mut self) {
+        if self.zoom_level >= 5.0 {
+            self.zoom_level = 5.0;
+        } else {
+            self.zoom_level = (self.zoom_level * 1.1).min(5.0);
+        }
+    }
+
+    pub fn zoom_out(&mut self) {
+        if self.zoom_level <= 0.1 {
+            self.zoom_level = 0.1;
+        } else {
+            self.zoom_level = (self.zoom_level / 1.1).max(0.1);
+        }
+    }
+
     fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
@@ -160,10 +176,10 @@ impl VcvRackApp {
                     self.reset_zoom();
                 }
                 if ui.add(egui::Button::new("Zoom In").shortcut_text("Ctrl++")).clicked() {
-                    self.zoom_level = (self.zoom_level * 1.1).min(5.0);
+                    self.zoom_in();
                 }
                 if ui.add(egui::Button::new("Zoom Out").shortcut_text("Ctrl+-")).clicked() {
-                    self.zoom_level = (self.zoom_level / 1.1).max(0.1);
+                    self.zoom_out();
                 }
                 ui.separator();
                 
@@ -175,28 +191,33 @@ impl VcvRackApp {
     }
 
     fn draw_rack(&mut self, ui: &mut egui::Ui) {
+        // Handle zoom controls first
+        if ui.input(|i| i.modifiers.ctrl) {
+            if ui.input(|i| i.key_pressed(egui::Key::Plus)) {
+                self.zoom_in();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Minus)) {
+                self.zoom_out();
+            }
+        }
+        
+        if ui.input(|i| i.modifiers.ctrl) {
+            let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
+            if scroll_delta != 0.0 {
+                if scroll_delta > 0.0 {
+                    self.zoom_in();
+                } else {
+                    self.zoom_out();
+                }
+            }
+        }
+
+        // Now handle the drawing
         if let Some(texture) = &self.rack_texture {
             let rail_width = texture.size_vec2().x * self.zoom_level;
             let rail_height = texture.size_vec2().y * self.zoom_level;
             
             let total_height = rail_height * 24.0;
-            
-            if ui.input(|i| i.modifiers.ctrl) {
-                if ui.input(|i| i.key_pressed(egui::Key::Plus)) {
-                    self.zoom_level = (self.zoom_level * 1.1).min(5.0);
-                }
-                if ui.input(|i| i.key_pressed(egui::Key::Minus)) {
-                    self.zoom_level = (self.zoom_level / 1.1).max(0.1);
-                }
-            }
-            
-            if ui.input(|i| i.modifiers.ctrl) {
-                let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
-                if scroll_delta != 0.0 {
-                    let zoom_delta = if scroll_delta > 0.0 { 1.1 } else { 1.0 / 1.1 };
-                    self.zoom_level = (self.zoom_level * zoom_delta).clamp(0.1, 5.0);
-                }
-            }
             
             egui::ScrollArea::both()
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
