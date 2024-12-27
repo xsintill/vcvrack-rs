@@ -3,8 +3,6 @@ use eframe::egui;
 
 #[test]
 fn test_new_vcvrack_app() {
-    // Since we can't easily create a CreationContext for testing,
-    // we'll need to test the components we can access
     let app = VcvRackApp {
         fullscreen: false,
         rack_texture: None,
@@ -28,10 +26,8 @@ fn test_toggle_fullscreen() {
         placed_plugins: Vec::new(),
     };
 
-    // Create a mock context
     let ctx = egui::Context::default();
     
-    // Test toggling fullscreen
     app.toggle_fullscreen(&ctx);
     assert_eq!(app.fullscreen, true);
     
@@ -56,7 +52,8 @@ fn test_zoom_level_constraints() {
     assert!(app.zoom_level <= 5.0, "Zoom level should not exceed maximum");
     
     // Reset zoom level
-    app.zoom_level = 1.0;
+    app.reset_zoom();
+    assert_eq!(app.zoom_level, 1.0, "Zoom level should be reset to 1.0");
     
     // Test zooming out beyond min limit
     for _ in 0..10 {
@@ -82,9 +79,57 @@ fn test_zoom_level_steps() {
     assert_eq!(app.zoom_level, 1.1, "Zoom in should increase by factor of 1.1");
 
     // Test single zoom out
-    app.zoom_level = 1.0; // Reset
+    app.reset_zoom(); // Reset to 1.0
     let original_zoom = app.zoom_level;
     app.zoom_level = (app.zoom_level / 1.1).max(0.1);
     assert!(app.zoom_level < original_zoom, "Zoom out should decrease zoom level");
     assert!((app.zoom_level - (1.0 / 1.1)).abs() < 0.0001, "Zoom out should decrease by factor of 1.1");
+}
+
+#[test]
+fn test_reset_zoom() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 2.5, // Start with a different zoom level
+        placed_plugins: Vec::new(),
+    };
+
+    // Test resetting zoom from a high value
+    app.reset_zoom();
+    assert_eq!(app.zoom_level, 1.0, "Zoom level should reset to 1.0 from high zoom");
+
+    // Test resetting zoom from a low value
+    app.zoom_level = 0.2;
+    app.reset_zoom();
+    assert_eq!(app.zoom_level, 1.0, "Zoom level should reset to 1.0 from low zoom");
+
+    // Test resetting zoom when already at 1.0
+    app.reset_zoom();
+    assert_eq!(app.zoom_level, 1.0, "Zoom level should remain at 1.0 when already at default");
+}
+
+#[test]
+fn test_draw_rack_with_input() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+    };
+
+    let ctx = egui::Context::default();
+    let mut raw_input = egui::RawInput::default();
+    
+    // Test scroll zoom
+    raw_input.events.push(egui::Event::PointerMoved(egui::pos2(0.0, 1.0)));
+    raw_input.modifiers.ctrl = true;
+    
+    let _ = ctx.run(raw_input, |ctx| {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            app.draw_rack(ui);
+        });
+    });
 }
