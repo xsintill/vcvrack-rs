@@ -26,3 +26,9 @@
 *.bak
 *.backup
 *~
+
+# Coverage files
+/coverage/
+*.profraw
+/lcov.info
+/coverage.html
