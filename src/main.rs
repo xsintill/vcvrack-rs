@@ -90,9 +90,13 @@ impl VcvRackApp {
         }
     }
 
-    fn toggle_fullscreen(&mut self, ctx: &egui::Context) {
+    pub fn toggle_fullscreen(&mut self, ctx: &egui::Context) {
         self.fullscreen = !self.fullscreen;
         ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(self.fullscreen));
+    }
+
+    pub fn reset_zoom(&mut self) {
+        self.zoom_level = 1.0;
     }
 
     fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -153,7 +157,7 @@ impl VcvRackApp {
                 ui.separator();
                 
                 if ui.add(egui::Button::new("Zoom to 100%")).clicked() {
-                    self.zoom_level = 1.0;
+                    self.reset_zoom();
                 }
                 if ui.add(egui::Button::new("Zoom In").shortcut_text("Ctrl++")).clicked() {
                     self.zoom_level = (self.zoom_level * 1.1).min(5.0);
