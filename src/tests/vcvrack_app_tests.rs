@@ -9,11 +9,13 @@ fn test_new_vcvrack_app() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     assert_eq!(app.fullscreen, false);
     assert_eq!(app.zoom_level, 1.0);
     assert!(app.placed_plugins.is_empty());
+    assert!(app.plugin_to_delete.is_none());
 }
 
 #[test]
@@ -24,6 +26,7 @@ fn test_toggle_fullscreen() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     let ctx = egui::Context::default();
@@ -43,6 +46,7 @@ fn test_zoom_level_constraints() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     // Test zooming in until max limit
@@ -85,6 +89,7 @@ fn test_zoom_in() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     // Test normal zoom in
@@ -107,6 +112,7 @@ fn test_zoom_out() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     // Test normal zoom out
@@ -129,6 +135,7 @@ fn test_reset_zoom() {
         blank_plate_plugin_texture: None,
         zoom_level: 2.5,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     app.reset_zoom();
@@ -143,6 +150,7 @@ fn test_draw_rack_with_input() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     let ctx = egui::Context::default();
@@ -161,6 +169,7 @@ fn test_update_menu() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     let ctx = egui::Context::default();
@@ -179,6 +188,7 @@ fn test_app_update() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     let ctx = egui::Context::default();
@@ -200,6 +210,7 @@ fn test_plugin_placement() {
         blank_plate_plugin_texture: None,
         zoom_level: 1.0,
         placed_plugins: Vec::new(),
+        plugin_to_delete: None,
     };
 
     // Add a plugin
@@ -211,4 +222,86 @@ fn test_plugin_placement() {
     app.placed_plugins.push(egui::pos2(200.0, 200.0));
     assert_eq!(app.placed_plugins.len(), 2);
     assert_eq!(app.placed_plugins[1], egui::pos2(200.0, 200.0));
+}
+
+#[test]
+fn test_plugin_placement_and_deletion() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+        plugin_to_delete: None,
+    };
+
+    // Add plugins
+    let pos1 = egui::pos2(100.0, 100.0);
+    let pos2 = egui::pos2(200.0, 200.0);
+    app.placed_plugins.push(pos1);
+    app.placed_plugins.push(pos2);
+    assert_eq!(app.placed_plugins.len(), 2);
+
+    // Test plugin deletion queueing
+    app.plugin_to_delete = Some(pos1);
+    assert!(app.plugin_to_delete.is_some());
+    
+    // Simulate a frame update that processes the deletion
+    if let Some(pos) = app.plugin_to_delete.take() {
+        app.delete_plugin(pos);
+    }
+    assert!(app.plugin_to_delete.is_none());
+    assert_eq!(app.placed_plugins.len(), 1);
+    assert_eq!(app.placed_plugins[0], pos2);
+
+    // Try to delete non-existent plugin
+    let non_existent_pos = egui::pos2(300.0, 300.0);
+    app.plugin_to_delete = Some(non_existent_pos);
+    if let Some(pos) = app.plugin_to_delete.take() {
+        app.delete_plugin(pos);
+    }
+    assert_eq!(app.placed_plugins.len(), 1, "Should not delete non-existent plugin");
+
+    // Delete remaining plugin
+    app.plugin_to_delete = Some(pos2);
+    if let Some(pos) = app.plugin_to_delete.take() {
+        app.delete_plugin(pos);
+    }
+    assert!(app.placed_plugins.is_empty());
+}
+
+#[test]
+fn test_plugin_delete_precision() {
+    let mut app = VcvRackApp {
+        fullscreen: false,
+        rack_texture: None,
+        blank_plate_plugin_texture: None,
+        zoom_level: 1.0,
+        placed_plugins: Vec::new(),
+        plugin_to_delete: None,
+    };
+
+    // Add a plugin
+    let pos = egui::pos2(100.0, 100.0);
+    app.placed_plugins.push(pos);
+
+    // Try to delete with slightly off positions
+    app.plugin_to_delete = Some(egui::pos2(100.5, 100.0));
+    if let Some(pos) = app.plugin_to_delete.take() {
+        app.delete_plugin(pos);
+    }
+    assert_eq!(app.placed_plugins.len(), 1, "Should not delete with x offset > 1.0");
+
+    app.plugin_to_delete = Some(egui::pos2(100.0, 100.5));
+    if let Some(pos) = app.plugin_to_delete.take() {
+        app.delete_plugin(pos);
+    }
+    assert_eq!(app.placed_plugins.len(), 1, "Should not delete with y offset > 1.0");
+
+    // Delete with position within tolerance
+    app.plugin_to_delete = Some(egui::pos2(100.1, 100.1));
+    if let Some(pos) = app.plugin_to_delete.take() {
+        app.delete_plugin(pos);
+    }
+    assert!(app.placed_plugins.is_empty(), "Should delete with position within tolerance");
 }

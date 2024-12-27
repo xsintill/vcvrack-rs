@@ -30,6 +30,7 @@ struct VcvRackApp {
     blank_plate_plugin_texture: Option<egui::TextureHandle>,
     zoom_level: f32,
     placed_plugins: Vec<egui::Pos2>,
+    plugin_to_delete: Option<egui::Pos2>,
 }
 
 impl VcvRackApp {
@@ -87,6 +88,7 @@ impl VcvRackApp {
             blank_plate_plugin_texture: Some(blank_plate_plugin_texture),
             zoom_level: 1.0,
             placed_plugins: Vec::new(),
+            plugin_to_delete: None,
         }
     }
 
@@ -112,6 +114,15 @@ impl VcvRackApp {
             self.zoom_level = 0.1;
         } else {
             self.zoom_level = (self.zoom_level / 1.1).max(0.1);
+        }
+    }
+
+    pub fn delete_plugin(&mut self, pos: egui::Pos2) {
+        const TOLERANCE: f32 = 0.2;  // Smaller tolerance for more precise deletion
+        if let Some(index) = self.placed_plugins.iter().position(|&p| {
+            (p.x - pos.x).abs() < TOLERANCE && (p.y - pos.y).abs() < TOLERANCE
+        }) {
+            self.placed_plugins.remove(index);
         }
     }
 
@@ -212,6 +223,11 @@ impl VcvRackApp {
             }
         }
 
+        // Handle any pending plugin deletion
+        if let Some(pos) = self.plugin_to_delete.take() {
+            self.delete_plugin(pos);
+        }
+
         // Now handle the drawing
         if let Some(texture) = &self.rack_texture {
             let rail_width = texture.size_vec2().x * self.zoom_level;
@@ -265,13 +281,19 @@ impl VcvRackApp {
 
                     // Then render all placed plugins in one pass
                     if let Some(blank_plate_plugin_texture) = &self.blank_plate_plugin_texture {
-                        for &plugin_pos in &self.placed_plugins {
+                        for &plugin_pos in &self.placed_plugins.clone() {  
+                            let plugin_rect = egui::Rect::from_min_size(plugin_pos, egui::vec2(rail_width, rail_height));
                             let plugin_image = egui::widgets::Image::new(blank_plate_plugin_texture)
                                 .fit_to_exact_size(egui::vec2(rail_width, rail_height));
-                            ui.put(
-                                egui::Rect::from_min_size(plugin_pos, egui::vec2(rail_width, rail_height)),
-                                plugin_image
-                            );
+                            
+                            // Show context menu on right click
+                            let response = ui.put(plugin_rect, plugin_image);
+                            response.context_menu(|ui| {
+                                if ui.button("Delete Plugin").clicked() {
+                                    self.plugin_to_delete = Some(plugin_pos);
+                                    ui.close_menu();
+                                }
+                            });
                         }
                     }
                 });
