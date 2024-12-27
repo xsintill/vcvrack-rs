@@ -1,0 +1,39 @@
+[tasks.generate-coverage]
+description = "Generate code coverage report"
+command = "cargo"
+args = ["llvm-cov", "--html"]
+
+[tasks.open-coverage]
+description = "Open coverage report in browser"
+condition = { platforms = ["windows"] }
+command = "cmd"
+args = ["/c", "start", "target\\llvm-cov\\html\\index.html"]
+
+[tasks.coverage]
+description = "Generate and open code coverage report"
+dependencies = ["generate-coverage", "open-coverage"]
+
+[tasks.test-watch]
+description = "Run tests and watch for changes"
+command = "cargo"
+args = ["watch", "-x", "test"]
+
+[tasks.build-release]
+description = "Build with optimizations"
+command = "cargo"
+args = ["build", "--release"]
+
+[tasks.fmt]
+description = "Format code"
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.fmt-check]
+description = "Check code formatting"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+
+[tasks.lint]
+description = "Run clippy lints"
+command = "cargo"
+args = ["clippy", "--", "-D", "warnings"]

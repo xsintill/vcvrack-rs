@@ -12,17 +12,3 @@ usvg = "0.44.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = "0.51"
-
-[alias]
-# Run tests with coverage instrumentation
-test-coverage = "llvm-cov --html"
-# Run tests and watch for changes
-test-watch = "watch -x test"
-# Build with optimizations
-build-release = "build --release"
-# Format code
-fmt = "fmt --all"
-# Check code formatting
-fmt-check = "fmt --all -- --check"
-# Run clippy lints
-lint = "clippy -- -D warnings"
