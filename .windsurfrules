@@ -6,5 +6,9 @@ Make sure any of the commands you are using is possible for windows(no linux or 
 For any new or changed feature update the documentation
 
 Create tests or update the related tests for new code
+Dont mix code meant for tests in the normal code.
 
 Please keep files small and simple and create new code files if it makes sense
+
+project:
+dont add space between plugins

@@ -68,13 +68,14 @@ impl VcvRackApp {
         }
     }
 
+    #[cfg(test)]
     pub fn new_test(_ctx: &egui::Context) -> Self {
         Self {
             fullscreen: false,
-            rack_texture: None,
+            plugin_manager: PluginManager::new(),
             blank_plate_plugin_texture: None,
             zoom_level: 1.0,
-            plugin_manager: PluginManager::new(),
+            rack_texture: None,
         }
     }
 
@@ -87,16 +88,18 @@ impl VcvRackApp {
         self.zoom_level = 1.0;
     }
 
+    const MIN_ZOOM: f32 = 0.4;
+    const MAX_ZOOM: f32 = 2.6;
+    const ZOOM_STEP: f32 = 0.2;
+
     pub fn zoom_in(&mut self) {
-        const MAX_ZOOM: f32 = 5.0;
-        const ZOOM_FACTOR: f32 = 1.1;
-        self.zoom_level = (self.zoom_level * ZOOM_FACTOR).min(MAX_ZOOM);
+        let new_zoom = self.zoom_level + Self::ZOOM_STEP;
+        self.zoom_level = new_zoom.min(Self::MAX_ZOOM);
     }
 
     pub fn zoom_out(&mut self) {
-        const MIN_ZOOM: f32 = 0.1;
-        const ZOOM_FACTOR: f32 = 1.1;
-        self.zoom_level = (self.zoom_level / ZOOM_FACTOR).max(MIN_ZOOM);
+        let new_zoom = self.zoom_level - Self::ZOOM_STEP;
+        self.zoom_level = new_zoom.max(Self::MIN_ZOOM);
     }
 
     fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -130,7 +133,7 @@ impl VcvRackApp {
                     let progress_rect = egui::Rect::from_min_max(
                         rect.min,
                         egui::pos2(
-                            rect.min.x + rect.width() * (self.zoom_level * 100.0) / 500.0,
+                            rect.min.x + rect.width() * (self.zoom_level * 100.0) / 260.0,
                             rect.max.y
                         ),
                     );
@@ -242,10 +245,12 @@ impl VcvRackApp {
                                 if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
                                     if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
                                         // Calculate the grid position based on the actual click position
-                                        let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
+                                        let grid_x = (pointer_pos.x / (30.4 * self.zoom_level)).floor() * (30.4 * self.zoom_level);
                                         let plugin_pos = egui::pos2(grid_x, pos.y);
                                         
-                                        self.plugin_manager.add_plugin(plugin_pos, self.blank_plate_plugin_texture.clone());
+                                        if let Some(texture) = &self.blank_plate_plugin_texture {
+                                            self.plugin_manager.add_plugin(plugin_pos, Some(texture.clone()));
+                                        }
                                     }
                                 }
                             }
@@ -261,11 +266,13 @@ impl VcvRackApp {
     }
 
     pub fn add_plugin(&mut self, pos: egui::Pos2) {
-        self.plugin_manager.add_plugin(pos, self.blank_plate_plugin_texture.clone());
+        if let Some(texture) = &self.blank_plate_plugin_texture {
+            self.plugin_manager.add_plugin(pos, Some(texture.clone()));
+        }
     }
 
     pub fn delete_plugin(&mut self, pos: egui::Pos2) {
-        self.plugin_manager.delete_plugin(pos);
+        self.plugin_manager.delete_plugin(pos, self.zoom_level);
     }
 
     pub fn get_plugins(&self) -> Vec<egui::Pos2> {
@@ -278,6 +285,16 @@ impl VcvRackApp {
 
     pub fn is_fullscreen(&self) -> bool {
         self.fullscreen
+    }
+
+    #[cfg(test)]
+    pub fn get_rack_texture(&self) -> Option<&egui::TextureHandle> {
+        self.rack_texture.as_ref()
+    }
+
+    #[cfg(test)]
+    pub fn get_blank_plate_plugin_texture(&self) -> Option<&egui::TextureHandle> {
+        self.blank_plate_plugin_texture.as_ref()
     }
 }
 
