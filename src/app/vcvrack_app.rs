@@ -1,13 +1,15 @@
+use crate::models::plugin::PluginManager;
+use eframe::egui;
+
 pub struct VcvRackApp {
     fullscreen: bool,
     rack_texture: Option<egui::TextureHandle>,
     blank_plate_plugin_texture: Option<egui::TextureHandle>,
     zoom_level: f32,
-    placed_plugins: Vec<egui::Pos2>,
-    plugin_to_delete: Option<egui::Pos2>,
-    selected_plugin: Option<egui::Pos2>,
+    pub plugin_manager: PluginManager,
 }
 
+#[allow(dead_code)]  // Temporarily allow dead code until we implement the UI
 impl VcvRackApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Load Rail SVG
@@ -50,7 +52,7 @@ impl VcvRackApp {
             [blank_plate_size.width() as _, blank_plate_size.height() as _],
             blank_plate_pixmap.data()
         );
-        
+
         let blank_plate_plugin_texture = cc.egui_ctx.load_texture(
             "blank_plate_plugin",
             blank_plate_image,
@@ -62,9 +64,17 @@ impl VcvRackApp {
             rack_texture: Some(rack_texture),
             blank_plate_plugin_texture: Some(blank_plate_plugin_texture),
             zoom_level: 1.0,
-            placed_plugins: Vec::new(),
-            plugin_to_delete: None,
-            selected_plugin: None,
+            plugin_manager: PluginManager::new(),
+        }
+    }
+
+    pub fn new_test(_ctx: &egui::Context) -> Self {
+        Self {
+            fullscreen: false,
+            rack_texture: None,
+            blank_plate_plugin_texture: None,
+            zoom_level: 1.0,
+            plugin_manager: PluginManager::new(),
         }
     }
 
@@ -78,39 +88,15 @@ impl VcvRackApp {
     }
 
     pub fn zoom_in(&mut self) {
-        if self.zoom_level >= 5.0 {
-            self.zoom_level = 5.0;
-        } else {
-            self.zoom_level = (self.zoom_level * 1.1).min(5.0);
-        }
+        const MAX_ZOOM: f32 = 5.0;
+        const ZOOM_FACTOR: f32 = 1.1;
+        self.zoom_level = (self.zoom_level * ZOOM_FACTOR).min(MAX_ZOOM);
     }
 
     pub fn zoom_out(&mut self) {
-        if self.zoom_level <= 0.1 {
-            self.zoom_level = 0.1;
-        } else {
-            self.zoom_level = (self.zoom_level / 1.1).max(0.1);
-        }
-    }
-
-    pub fn delete_plugin(&mut self, pos: egui::Pos2) {
-        const TOLERANCE: f32 = 0.2;  // Smaller tolerance for more precise deletion
-        if let Some(index) = self.placed_plugins.iter().position(|&p| {
-            (p.x - pos.x).abs() < TOLERANCE && (p.y - pos.y).abs() < TOLERANCE
-        }) {
-            self.placed_plugins.remove(index);
-        }
-    }
-
-    pub fn select_plugin(&mut self, pos: egui::Pos2) {
-        const TOLERANCE: f32 = 0.2;
-        self.selected_plugin = self.placed_plugins.iter().find(|&&p| {
-            (p.x - pos.x).abs() < TOLERANCE && (p.y - pos.y).abs() < TOLERANCE
-        }).copied();
-    }
-
-    pub fn deselect_plugin(&mut self) {
-        self.selected_plugin = None;
+        const MIN_ZOOM: f32 = 0.1;
+        const ZOOM_FACTOR: f32 = 1.1;
+        self.zoom_level = (self.zoom_level / ZOOM_FACTOR).max(MIN_ZOOM);
     }
 
     fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -210,30 +196,17 @@ impl VcvRackApp {
             }
         }
 
-        // Handle any pending plugin deletion
-        if let Some(pos) = self.plugin_to_delete.take() {
-            self.delete_plugin(pos);
-            if Some(pos) == self.selected_plugin {
-                self.deselect_plugin();
-            }
-        }
-
         // Check for clicks outside plugins to deselect
         let mut clicked_outside = false;
         if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                clicked_outside = !self.placed_plugins.iter().any(|&p| {
-                    (p.x - pos.x).abs() < 0.2 && (p.y - pos.y).abs() < 0.2
-                });
+                clicked_outside = self.plugin_manager.get_plugin_at_position(pos, 0.2).is_none();
             }
         }
 
         if clicked_outside {
-            self.deselect_plugin();
+            self.plugin_manager.deselect_all();
         }
-
-        // Store clicked position outside the closure
-        let mut clicked_pos = None;
 
         // Now handle the drawing
         if let Some(texture) = &self.rack_texture {
@@ -258,7 +231,6 @@ impl VcvRackApp {
                             let image = egui::widgets::Image::new(texture)
                                 .fit_to_exact_size(egui::vec2(rail_width, rail_height));
                              
-
                             let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
                             let rail_rect = egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height));
 
@@ -266,68 +238,46 @@ impl VcvRackApp {
                             ui.put(rail_rect, image.clone());
 
                             // Handle plugin placement on click
-                            if ui.rect_contains_pointer(rail_rect) && ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
-                                if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
-                                    // Calculate the grid position based on the actual click position
-                                    let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
-                                    let plugin_pos = egui::pos2(grid_x, pos.y);
-                                    
-                                    // Only add if there isn't already a plugin at this position
-                                    let already_placed = self.placed_plugins.iter().any(|&existing_pos| {
-                                        (existing_pos.x - plugin_pos.x).abs() < 1.0 && 
-                                        (existing_pos.y - plugin_pos.y).abs() < 1.0
-                                    });
-
-                                    if !already_placed {
-                                        // Store the new plugin position
-                                        self.placed_plugins.push(plugin_pos);
+                            if ui.rect_contains_pointer(rail_rect) {
+                                if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
+                                    if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                                        // Calculate the grid position based on the actual click position
+                                        let grid_x = (pointer_pos.x / 30.4).floor() * 30.4;
+                                        let plugin_pos = egui::pos2(grid_x, pos.y);
+                                        
+                                        self.plugin_manager.add_plugin(plugin_pos, self.blank_plate_plugin_texture.clone());
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Then render all placed plugins in one pass
-                    if let Some(blank_plate_plugin_texture) = &self.blank_plate_plugin_texture {
-                        for &plugin_pos in &self.placed_plugins.clone() {  
-                            let plugin_rect = egui::Rect::from_min_size(plugin_pos, egui::vec2(rail_width, rail_height));
-                            let plugin_image = egui::widgets::Image::new(blank_plate_plugin_texture)
-                                .fit_to_exact_size(egui::vec2(rail_width, rail_height));
-                             
-
-                            // Show context menu on right click
-                            let response = ui.put(plugin_rect, plugin_image);
-
-                            // Handle left click for selection
-                            if response.clicked_by(egui::PointerButton::Primary) {
-                                clicked_pos = Some(plugin_pos);
-                            }
-
-                            response.context_menu(|ui| {
-                                if ui.button("Delete Plugin").clicked() {
-                                    self.plugin_to_delete = Some(plugin_pos);
-                                    ui.close_menu();
-                                }
-                            });
-
-                            // Draw selection overlay if this plugin is selected
-                            if Some(plugin_pos) == self.selected_plugin {
-                                ui.painter().rect(
-                                    plugin_rect,
-                                    0.0,
-                                    egui::Color32::from_rgba_premultiplied(255, 140, 0, 40),  // Transparent orange fill
-                                    egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 140, 0)),  // Dark orange border
-                                );
-                            }
-                        }
+                    // Draw all plugins
+                    if self.blank_plate_plugin_texture.is_some() {
+                        self.plugin_manager.draw_plugins(ui, self.zoom_level);
                     }
                 });
         }
+    }
 
-        // Handle selection after the closure
-        if let Some(pos) = clicked_pos {
-            self.select_plugin(pos);
-        }
+    pub fn add_plugin(&mut self, pos: egui::Pos2) {
+        self.plugin_manager.add_plugin(pos, self.blank_plate_plugin_texture.clone());
+    }
+
+    pub fn delete_plugin(&mut self, pos: egui::Pos2) {
+        self.plugin_manager.delete_plugin(pos);
+    }
+
+    pub fn get_plugins(&self) -> Vec<egui::Pos2> {
+        self.plugin_manager.get_plugins()
+    }
+
+    pub fn get_zoom_level(&self) -> f32 {
+        self.zoom_level
+    }
+
+    pub fn is_fullscreen(&self) -> bool {
+        self.fullscreen
     }
 }
 

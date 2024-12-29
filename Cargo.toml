@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 eframe = "0.30.0"   # Updated to latest stable version
 egui = "0.30.0"     # Updated to match eframe version
+raw-window-handle = "0.6"
 resvg = "0.44.0"
 tiny-skia = "0.11.4"
 usvg = "0.44.0"

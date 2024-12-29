@@ -1,28 +1,19 @@
-use eframe::egui;
-use resvg::usvg::{self};
-
 mod app;
+mod models;
+
 use app::VcvRackApp;
 
-#[cfg(test)]
-mod tests;
-
-fn main() {
+fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
+        viewport: eframe::egui::ViewportBuilder::default()
             .with_maximized(true)
             .with_title("VCV Rack Rust"),
         ..Default::default()
     };
 
-    if let Err(e) = eframe::run_native(
+    eframe::run_native(
         "VCV Rack Rust",
         native_options,
-        Box::new(|cc| {
-            let app = VcvRackApp::new(cc);
-            Ok(Box::new(app))
-        }),
-    ) {
-        eprintln!("Application error: {}", e);
-    }
+        Box::new(|cc| Ok(Box::new(VcvRackApp::new(cc)))),
+    )
 }
