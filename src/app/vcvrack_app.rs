@@ -11,6 +11,7 @@ pub struct VcvRackApp {
     blank_plate_plugin_texture: Option<egui::TextureHandle>,
     zoom_level: f32,
     pub plugin_manager: PluginManager,
+    pub current_file: Option<PathBuf>,
 }
 
 #[allow(dead_code)]  // Temporarily allow dead code until we implement the UI
@@ -69,6 +70,7 @@ impl VcvRackApp {
             blank_plate_plugin_texture: Some(blank_plate_plugin_texture),
             zoom_level: 1.0,
             plugin_manager: PluginManager::new(),
+            current_file: None,
         }
     }
 
@@ -80,6 +82,7 @@ impl VcvRackApp {
             blank_plate_plugin_texture: None,
             zoom_level: 1.0,
             rack_texture: None,
+            current_file: None,
         }
     }
 
@@ -221,6 +224,7 @@ impl VcvRackApp {
                             let image = egui::widgets::Image::new(texture)
                                 .fit_to_exact_size(egui::vec2(rail_width, rail_height));
                              
+
                             let pos = egui::pos2(col as f32 * rail_width, row as f32 * rail_height);
                             let rail_rect = egui::Rect::from_min_size(pos, egui::vec2(rail_width, rail_height));
 
@@ -320,14 +324,15 @@ impl VcvRackApp {
         }
     }
 
-    pub fn save_rack_state(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save_rack_state(&mut self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let save_dir = Self::get_save_directory().ok_or("Could not get save directory")?;
         let file_path = save_dir.join(format!("{}.json", name));
         
         let state = self.plugin_manager.save_state();
         let json = serde_json::to_string_pretty(&state)?;
-        fs::write(file_path, json)?;
+        fs::write(&file_path, json)?;
         
+        self.current_file = Some(file_path);
         Ok(())
     }
 
@@ -335,10 +340,11 @@ impl VcvRackApp {
         let save_dir = Self::get_save_directory().ok_or("Could not get save directory")?;
         let file_path = save_dir.join(format!("{}.json", name));
         
-        let json = fs::read_to_string(file_path)?;
+        let json = fs::read_to_string(&file_path)?;
         let state: RackState = serde_json::from_str(&json)?;
         
         self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
+        self.current_file = Some(file_path);
         
         Ok(())
     }
@@ -363,6 +369,17 @@ impl VcvRackApp {
 
 impl eframe::App for VcvRackApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        ctx.set_visuals(egui::Visuals::dark());
+
+        // Set window title with current file
+        if let Some(file) = &self.current_file {
+            if let Some(filename) = file.file_name() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(
+                    format!("VCV Rack Rust 0.0.1 - {}", filename.to_string_lossy())
+                ));
+            }
+        }
+
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             self.update_menu(ctx, ui);
         });
