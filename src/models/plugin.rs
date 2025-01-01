@@ -336,4 +336,10 @@ impl PluginManager {
             .collect();
         self.next_id = self.next_id.max(plugins_len);
     }
+
+    pub fn get_selected_plugins(&self) -> Vec<&Plugin> {
+        self.plugins.iter()
+            .filter(|p| p.is_selected())
+            .collect()
+    }
 }

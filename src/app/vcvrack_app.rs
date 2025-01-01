@@ -12,6 +12,7 @@ pub struct VcvRackApp {
     zoom_level: f32,
     pub plugin_manager: PluginManager,
     pub current_file: Option<PathBuf>,
+    pub has_unsaved_changes: bool,
 }
 
 #[allow(dead_code)]  // Temporarily allow dead code until we implement the UI
@@ -71,6 +72,7 @@ impl VcvRackApp {
             zoom_level: 1.0,
             plugin_manager: PluginManager::new(),
             current_file: None,
+            has_unsaved_changes: false,
         };
 
         // Try to load default.json on startup
@@ -95,6 +97,7 @@ impl VcvRackApp {
             zoom_level: 1.0,
             rack_texture: None,
             current_file: None,
+            has_unsaved_changes: false,
         };
 
         // Try to load default.json on startup
@@ -239,7 +242,10 @@ impl VcvRackApp {
 
                     // Handle delete key press
                     if ui.input(|i| i.key_pressed(egui::Key::Delete)) {
-                        self.plugin_manager.delete_selected_plugins();
+                        if !self.plugin_manager.get_selected_plugins().is_empty() {
+                            self.plugin_manager.delete_selected_plugins();
+                            self.has_unsaved_changes = true;
+                        }
                     }
 
                     // First render all rails
@@ -259,7 +265,6 @@ impl VcvRackApp {
                             if ui.rect_contains_pointer(rail_rect) {
                                 if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
                                     if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
-                                        #[cfg(not(test))]
                                         println!("Adding plugin at position: {:?}", pointer_pos);
                                         
                                         // Calculate the grid position based on the actual click position
@@ -288,6 +293,7 @@ impl VcvRackApp {
                                             // If position is free, add a new plugin
                                             self.plugin_manager.deselect_all();
                                             self.plugin_manager.add_plugin(plugin_pos, Some(texture.clone()));
+                                            self.has_unsaved_changes = true;
                                         }
                                         click_consumed = true;
                                     }
@@ -307,11 +313,13 @@ impl VcvRackApp {
     pub fn add_plugin(&mut self, pos: egui::Pos2) {
         if let Some(texture) = &self.blank_plate_plugin_texture {
             self.plugin_manager.add_plugin(pos, Some(texture.clone()));
+            self.has_unsaved_changes = true;
         }
     }
 
     pub fn delete_plugin(&mut self, pos: egui::Pos2) {
         self.plugin_manager.delete_plugin(pos, self.zoom_level);
+        self.has_unsaved_changes = true;
     }
 
     pub fn get_plugins(&self) -> Vec<egui::Pos2> {
@@ -357,6 +365,7 @@ impl VcvRackApp {
         fs::write(&file_path, json)?;
         
         self.current_file = Some(file_path);
+        self.has_unsaved_changes = false;
         Ok(())
     }
 
@@ -369,7 +378,7 @@ impl VcvRackApp {
         
         self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
         self.current_file = Some(file_path);
-        
+        self.has_unsaved_changes = false;
         Ok(())
     }
 
@@ -395,14 +404,18 @@ impl eframe::App for VcvRackApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         ctx.set_visuals(egui::Visuals::dark());
 
-        // Set window title with current file
+        // Set window title with current file and unsaved changes indicator
+        let mut title = String::from("VCV Rack Rust 0.0.1");
         if let Some(file) = &self.current_file {
             if let Some(filename) = file.file_name() {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Title(
-                    format!("VCV Rack Rust 0.0.1 - {}", filename.to_string_lossy())
-                ));
+                title = format!("{} - {}{}", 
+                    title,
+                    filename.to_string_lossy(),
+                    if self.has_unsaved_changes { "*" } else { "" }
+                );
             }
         }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             self.update_menu(ctx, ui);
