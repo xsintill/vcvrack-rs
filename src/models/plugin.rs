@@ -1,10 +1,61 @@
 use eframe::egui;
+use serde::{Serialize, Deserialize};
 
+#[derive(Clone)]
 pub struct Plugin {
-    pub position: egui::Pos2,
+    #[allow(dead_code)]
     pub texture: Option<egui::TextureHandle>,
+    pub position: egui::Pos2,
     pub selected: bool,
     pub id: usize,
+}
+
+impl std::fmt::Debug for Plugin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Plugin")
+            .field("position", &self.position)
+            .field("selected", &self.selected)
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
+impl Serialize for Plugin {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let state = PluginState {
+            x: self.position.x,
+            y: self.position.y,
+            selected: self.selected,
+            id: self.id,
+        };
+        state.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Plugin {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let state = PluginState::deserialize(deserializer)?;
+        Ok(Plugin::from_state(state, None))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginState {
+    pub x: f32,
+    pub y: f32,
+    pub selected: bool,
+    pub id: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RackState {
+    pub plugins: Vec<PluginState>,
 }
 
 impl Plugin {
@@ -112,6 +163,24 @@ impl Plugin {
     pub fn get_width(&self) -> f32 {
         15.2
     }
+
+    pub fn to_state(&self) -> PluginState {
+        PluginState {
+            x: self.position.x,
+            y: self.position.y,
+            selected: self.selected,
+            id: self.id,
+        }
+    }
+
+    pub fn from_state(state: PluginState, texture: Option<egui::TextureHandle>) -> Self {
+        Self {
+            texture,
+            position: egui::pos2(state.x, state.y),
+            selected: state.selected,
+            id: state.id,
+        }
+    }
 }
 
 pub struct PluginManager {
@@ -170,8 +239,7 @@ impl PluginManager {
     }
 
     pub fn select_plugin(&mut self, pos: egui::Pos2, zoom_level: f32) {
-        // First check if we clicked on any plugin
-        if let Some(clicked_plugin) = self.get_plugin_at_position(pos, zoom_level) {
+        if let Some(_) = self.get_plugin_at_position(pos, zoom_level) {
             if let Some(plugin) = self.plugins.iter_mut().find(|p| p.is_at_position(pos, zoom_level)) {
                 // Toggle selection if clicking on a selected plugin
                 plugin.set_selected(!plugin.is_selected());
@@ -253,5 +321,19 @@ impl PluginManager {
 
     pub fn delete_selected_plugins(&mut self) {
         self.plugins.retain(|plugin| !plugin.selected);
+    }
+
+    pub fn save_state(&self) -> RackState {
+        RackState {
+            plugins: self.plugins.iter().map(|p| p.to_state()).collect(),
+        }
+    }
+
+    pub fn load_state(&mut self, state: RackState, texture: Option<egui::TextureHandle>) {
+        let plugins_len = state.plugins.len();
+        self.plugins = state.plugins.into_iter()
+            .map(|p| Plugin::from_state(p, texture.clone()))
+            .collect();
+        self.next_id = self.next_id.max(plugins_len);
     }
 }

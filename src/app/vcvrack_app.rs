@@ -1,5 +1,9 @@
-use crate::models::plugin::PluginManager;
+use crate::models::plugin::{PluginManager, RackState};
 use eframe::egui;
+use std::path::PathBuf;
+use directories::ProjectDirs;
+use std::fs;
+use serde_json;
 
 pub struct VcvRackApp {
     fullscreen: bool,
@@ -105,11 +109,22 @@ impl VcvRackApp {
     fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
-                ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
-                    if ui.add(egui::Button::new("Exit").shortcut_text("Ctrl+Q")).clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                if ui.button("Save").clicked() {
+                    if let Ok(()) = self.save_rack_state("default") {
+                        println!("Rack state saved successfully");
                     }
-                });
+                    ui.close_menu();
+                }
+                if ui.button("Load").clicked() {
+                    if let Ok(()) = self.load_rack_state("default") {
+                        println!("Rack state loaded successfully");
+                    }
+                    ui.close_menu();
+                }
+                ui.separator();
+                if ui.button("Exit").clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
             });
             
             ui.menu_button("View", |ui| {
@@ -292,33 +307,78 @@ impl VcvRackApp {
     pub fn get_blank_plate_plugin_texture(&self) -> Option<&egui::TextureHandle> {
         self.blank_plate_plugin_texture.as_ref()
     }
+
+    pub fn get_save_directory() -> Option<PathBuf> {
+        if let Some(proj_dirs) = ProjectDirs::from("com", "vcvrack", "vcvrack-rs") {
+            let data_dir = proj_dirs.data_dir();
+            if !data_dir.exists() {
+                fs::create_dir_all(data_dir).ok()?;
+            }
+            Some(data_dir.to_path_buf())
+        } else {
+            None
+        }
+    }
+
+    pub fn save_rack_state(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let save_dir = Self::get_save_directory().ok_or("Could not get save directory")?;
+        let file_path = save_dir.join(format!("{}.json", name));
+        
+        let state = self.plugin_manager.save_state();
+        let json = serde_json::to_string_pretty(&state)?;
+        fs::write(file_path, json)?;
+        
+        Ok(())
+    }
+
+    pub fn load_rack_state(&mut self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let save_dir = Self::get_save_directory().ok_or("Could not get save directory")?;
+        let file_path = save_dir.join(format!("{}.json", name));
+        
+        let json = fs::read_to_string(file_path)?;
+        let state: RackState = serde_json::from_str(&json)?;
+        
+        self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
+        
+        Ok(())
+    }
+
+    pub fn list_saved_states() -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let save_dir = Self::get_save_directory().ok_or("Could not get save directory")?;
+        let mut states = Vec::new();
+        
+        for entry in fs::read_dir(save_dir)? {
+            if let Ok(entry) = entry {
+                if let Some(name) = entry.path().file_stem() {
+                    if let Some(name) = name.to_str() {
+                        states.push(name.to_string());
+                    }
+                }
+            }
+        }
+        
+        Ok(states)
+    }
 }
 
 impl eframe::App for VcvRackApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if ctx.input(|i| i.key_pressed(egui::Key::F11)) {
-            self.toggle_fullscreen(ctx);
-        }
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            self.update_menu(ctx, ui);
+        });
 
         if self.fullscreen {
-            let menu_area = egui::Rect::from_min_size(
-                egui::pos2(0.0, 0.0),
-                egui::vec2(ctx.screen_rect().width(), 24.0)
-            );
-            
-            if menu_area.contains(ctx.pointer_hover_pos().unwrap_or_default()) {
-                egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-                    self.update_menu(ctx, ui);
-                });
-            }
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.draw_rack(ui);
+            });
         } else {
-            egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-                self.update_menu(ctx, ui);
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.draw_rack(ui);
             });
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            self.draw_rack(ui);
-        });
+        if ctx.input(|i| i.key_pressed(egui::Key::F11)) {
+            self.toggle_fullscreen(ctx);
+        }
     }
 }

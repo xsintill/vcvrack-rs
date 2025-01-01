@@ -198,4 +198,37 @@ mod tests {
         let plugin = manager.get_plugin_at_position(egui::pos2(200.0, 200.0), TEST_ZOOM);
         assert!(plugin.is_none());
     }
+
+    #[test]
+    fn test_save_load_state() {
+        let (_ctx, mut manager, mock_textures) = create_test_context();
+        let pos1 = egui::pos2(100.0, 100.0);
+        let pos2 = egui::pos2(130.4, 100.0);
+        
+        // Add and select plugins
+        manager.add_plugin(pos1, Some(mock_textures.blank_plate.clone()));
+        manager.add_plugin(pos2, Some(mock_textures.blank_plate.clone()));
+        manager.select_plugin(pos1, TEST_ZOOM);
+        
+        // Save state
+        let state = manager.save_state();
+        
+        // Clear manager
+        manager = PluginManager::new();
+        assert_eq!(manager.get_plugins().len(), 0, "Manager should be empty after reset");
+        
+        // Load state
+        manager.load_state(state, Some(mock_textures.blank_plate.clone()));
+        
+        // Verify plugins were restored correctly
+        assert_eq!(manager.get_plugins().len(), 2, "Should have 2 plugins after loading");
+        
+        let plugin1 = manager.get_plugin_at_position(pos1, TEST_ZOOM).unwrap();
+        let plugin2 = manager.get_plugin_at_position(pos2, TEST_ZOOM).unwrap();
+        
+        assert!(plugin1.is_selected(), "First plugin should be selected");
+        assert!(!plugin2.is_selected(), "Second plugin should not be selected");
+        assert_eq!(plugin1.position, pos1, "First plugin should be at original position");
+        assert_eq!(plugin2.position, pos2, "Second plugin should be at original position");
+    }
 }
