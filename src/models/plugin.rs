@@ -332,7 +332,11 @@ impl PluginManager {
     pub fn load_state(&mut self, state: RackState, texture: Option<egui::TextureHandle>) {
         let plugins_len = state.plugins.len();
         self.plugins = state.plugins.into_iter()
-            .map(|p| Plugin::from_state(p, texture.clone()))
+            .map(|p| {
+                let mut plugin = Plugin::from_state(p, texture.clone());
+                plugin.selected = false;  // Ensure all plugins are deselected when loading
+                plugin
+            })
             .collect();
         self.next_id = self.next_id.max(plugins_len);
     }

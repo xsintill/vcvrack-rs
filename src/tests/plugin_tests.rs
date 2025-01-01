@@ -226,8 +226,8 @@ mod tests {
         let plugin1 = manager.get_plugin_at_position(pos1, TEST_ZOOM).unwrap();
         let plugin2 = manager.get_plugin_at_position(pos2, TEST_ZOOM).unwrap();
         
-        assert!(plugin1.is_selected(), "First plugin should be selected");
-        assert!(!plugin2.is_selected(), "Second plugin should not be selected");
+        assert!(!plugin1.is_selected(), "First plugin should not be selected after loading");
+        assert!(!plugin2.is_selected(), "Second plugin should not be selected after loading");
         assert_eq!(plugin1.position, pos1, "First plugin should be at original position");
         assert_eq!(plugin2.position, pos2, "Second plugin should be at original position");
     }

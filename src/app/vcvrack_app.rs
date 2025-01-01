@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use directories::ProjectDirs;
 use std::fs;
 use serde_json;
+use rfd::FileDialog;
 
 pub struct VcvRackApp {
     fullscreen: bool,
@@ -144,6 +145,27 @@ impl VcvRackApp {
                 if ui.add(egui::Button::new("Save").shortcut_text(ui.ctx().format_shortcut(&save_shortcut))).clicked() {
                     if let Ok(()) = self.save_rack_state("default") {
                         println!("Rack state saved successfully");
+                    }
+                    ui.close_menu();
+                }
+                let save_as_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::CTRL | egui::Modifiers::SHIFT, egui::Key::S);
+                if ui.add(egui::Button::new("Save As...").shortcut_text(ui.ctx().format_shortcut(&save_as_shortcut))).clicked() {
+                    if let Some(save_dir) = Self::get_save_directory() {
+                        if let Some(file_path) = FileDialog::new()
+                            .set_directory(&save_dir)
+                            .set_file_name("New rack.json")
+                            .add_filter("JSON files", &["json"])
+                            .save_file() 
+                        {
+                            let file_name = file_path.file_stem()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("default");
+                            
+                            if let Ok(()) = self.save_rack_state(file_name) {
+                                println!("Rack state saved successfully as {}", file_name);
+                                self.current_file = Some(file_path);
+                            }
+                        }
                     }
                     ui.close_menu();
                 }
@@ -440,9 +462,30 @@ impl eframe::App for VcvRackApp {
         }
 
         // Handle Ctrl+S for saving
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S)) {
+        if ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(egui::Key::S)) {
             if let Ok(()) = self.save_rack_state("default") {
                 println!("Rack state saved successfully");
+            }
+        }
+
+        // Handle Ctrl+Shift+S for save as
+        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::S)) {
+            if let Some(save_dir) = Self::get_save_directory() {
+                if let Some(file_path) = FileDialog::new()
+                    .set_directory(&save_dir)
+                    .set_file_name("New rack.json")
+                    .add_filter("JSON files", &["json"])
+                    .save_file() 
+                {
+                    let file_name = file_path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("default");
+                    
+                    if let Ok(()) = self.save_rack_state(file_name) {
+                        println!("Rack state saved successfully as {}", file_name);
+                        self.current_file = Some(file_path);
+                    }
+                }
             }
         }
 
