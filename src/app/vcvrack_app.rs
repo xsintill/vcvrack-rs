@@ -140,7 +140,8 @@ impl VcvRackApp {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 ui.set_min_width(200.0); // Match View menu width
-                if ui.button("Save").clicked() {
+                let save_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::S);
+                if ui.add(egui::Button::new("Save").shortcut_text(ui.ctx().format_shortcut(&save_shortcut))).clicked() {
                     if let Ok(()) = self.save_rack_state("default") {
                         println!("Rack state saved successfully");
                     }
@@ -435,6 +436,13 @@ impl eframe::App for VcvRackApp {
 
         if ctx.input(|i| i.key_pressed(egui::Key::F11)) {
             self.toggle_fullscreen(ctx);
+        }
+
+        // Handle Ctrl+S for saving
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S)) {
+            if let Ok(()) = self.save_rack_state("default") {
+                println!("Rack state saved successfully");
+            }
         }
     }
 }
