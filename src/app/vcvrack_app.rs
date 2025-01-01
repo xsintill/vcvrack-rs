@@ -223,10 +223,14 @@ impl VcvRackApp {
                                         let grid_x = (pointer_pos.x / (30.4 * self.zoom_level)).floor() * (30.4 * self.zoom_level);
                                         let plugin_pos = egui::pos2(grid_x, pos.y);
                                         
+                                        let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
+                                        
                                         // Check if there's already a plugin at this position
                                         if self.plugin_manager.get_plugin_at_position(plugin_pos, self.zoom_level).is_some() {
-                                            // If there's already a plugin, select it instead of trying to add a new one
-                                            self.plugin_manager.deselect_all();
+                                            // If there's already a plugin, select it
+                                            if !ctrl_pressed {
+                                                self.plugin_manager.deselect_all();
+                                            }
                                             self.plugin_manager.select_plugin(plugin_pos, self.zoom_level);
                                         } else if let Some(texture) = &self.blank_plate_plugin_texture {
                                             // If position is free, add a new plugin

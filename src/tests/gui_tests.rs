@@ -618,4 +618,45 @@ mod gui_tests {
         assert!(manager.get_plugin_at_position(pos1, TEST_ZOOM).is_none(), "First plugin should be deleted");
         assert!(manager.get_plugin_at_position(pos2, TEST_ZOOM).is_some(), "Second plugin should still exist");
     }
+
+    #[test]
+    fn test_multiselect_with_ctrl() {
+        let (_ctx, mut manager, mock_textures) = create_test_context();
+        let pos1 = egui::pos2(100.0, 100.0);
+        let pos2 = egui::pos2(130.4, 100.0);
+        let pos3 = egui::pos2(160.8, 100.0);
+        
+        // Add three plugins
+        manager.add_plugin(pos1, Some(mock_textures.blank_plate.clone()));
+        manager.add_plugin(pos2, Some(mock_textures.blank_plate.clone()));
+        manager.add_plugin(pos3, Some(mock_textures.blank_plate.clone()));
+        assert_eq!(manager.get_plugins().len(), 3, "Should have 3 plugins initially");
+        
+        // Select first plugin (simulating normal click)
+        manager.deselect_all();
+        manager.select_plugin(pos1, TEST_ZOOM);
+        
+        // Verify first plugin is selected
+        let plugin1 = manager.get_plugin_at_position(pos1, TEST_ZOOM).unwrap();
+        assert!(plugin1.is_selected(), "First plugin should be selected");
+        
+        // Select second plugin without deselecting (simulating Ctrl+click)
+        manager.select_plugin(pos2, TEST_ZOOM);
+        
+        // Verify both plugins are selected
+        let plugin1 = manager.get_plugin_at_position(pos1, TEST_ZOOM).unwrap();
+        let plugin2 = manager.get_plugin_at_position(pos2, TEST_ZOOM).unwrap();
+        let plugin3 = manager.get_plugin_at_position(pos3, TEST_ZOOM).unwrap();
+        
+        assert!(plugin1.is_selected(), "First plugin should still be selected");
+        assert!(plugin2.is_selected(), "Second plugin should be selected");
+        assert!(!plugin3.is_selected(), "Third plugin should not be selected");
+        
+        // Delete selected plugins
+        manager.delete_selected_plugins();
+        
+        // Verify only unselected plugin remains
+        assert_eq!(manager.get_plugins().len(), 1, "Should have 1 plugin after deletion");
+        assert!(manager.get_plugin_at_position(pos3, TEST_ZOOM).is_some(), "Third plugin should still exist");
+    }
 }
