@@ -39,10 +39,11 @@ mod tests {
         let ctx = egui::Context::default();
         let texture = create_mock_texture(&ctx);
         let pos = egui::pos2(100.0, 100.0);
-        let plugin = Plugin::new(pos, Some(texture));
+        let plugin = Plugin::new(pos, Some(texture), 0);
         assert_eq!(plugin.position, pos);
         assert!(!plugin.selected);
         assert!(plugin.texture.is_some());
+        assert_eq!(plugin.id, 0);
     }
 
     #[test]
@@ -50,7 +51,7 @@ mod tests {
         let ctx = egui::Context::default();
         let texture = create_mock_texture(&ctx);
         let pos = egui::pos2(100.0, 100.0);
-        let plugin = Plugin::new(pos, Some(texture));
+        let plugin = Plugin::new(pos, Some(texture), 0);
         
         // Test exact position
         assert!(plugin.is_at_position(pos, TEST_ZOOM));
@@ -67,7 +68,7 @@ mod tests {
         let ctx = egui::Context::default();
         let texture = create_mock_texture(&ctx);
         let pos = egui::pos2(100.0, 100.0);
-        let mut plugin = Plugin::new(pos, Some(texture));
+        let mut plugin = Plugin::new(pos, Some(texture), 0);
         
         assert!(!plugin.selected);
         plugin.set_selected(true);
@@ -140,27 +141,26 @@ mod tests {
 
         // Add plugins at specific positions
         let grid_positions = vec![
-            100.0,   // First position
+            100.0,   // Initial position
             130.4,   // Next position (+30.4)
             160.8,   // Next position (+30.4)
             191.2,   // Next position (+30.4)
         ];
         
-        for &grid_x in &grid_positions {
-            let pos = egui::pos2(grid_x, 100.0);
+        for grid_x in &grid_positions {
+            let pos = egui::pos2(*grid_x, 100.0);
             manager.add_plugin(pos, Some(mock_textures.blank_plate.clone()));
         }
 
         // Get all plugin positions
-        let plugin_positions = manager.get_plugins();
-        assert_eq!(plugin_positions.len(), grid_positions.len());
-
-        // Verify each plugin is at the expected position
-        for (i, &expected_x) in grid_positions.iter().enumerate() {
-            let plugin_pos = plugin_positions[i];
-            assert!((plugin_pos.x - expected_x).abs() < 0.1,
-                   "Plugin {} should be at x={}, but was at x={}", 
-                   i, expected_x, plugin_pos.x);
+        let positions = manager.get_plugins();
+        
+        // Verify we have the correct number of plugins
+        assert_eq!(positions.len(), grid_positions.len());
+        
+        // Verify positions match grid positions
+        for (i, &grid_x) in grid_positions.iter().enumerate() {
+            assert_eq!(positions[i].x, grid_x);
         }
     }
 

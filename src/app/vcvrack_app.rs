@@ -177,47 +177,12 @@ impl VcvRackApp {
         });
     }
 
-    fn draw_rack(&mut self, ui: &mut egui::Ui) {
-        // Handle zoom controls first
-        if ui.input(|i| i.modifiers.ctrl) {
-            if ui.input(|i| i.key_pressed(egui::Key::Plus)) {
-                self.zoom_in();
-            }
-            if ui.input(|i| i.key_pressed(egui::Key::Minus)) {
-                self.zoom_out();
-            }
-        }
-        
-        if ui.input(|i| i.modifiers.ctrl) {
-            let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
-            if scroll_delta != 0.0 {
-                if scroll_delta > 0.0 {
-                    self.zoom_in();
-                } else {
-                    self.zoom_out();
-                }
-            }
-        }
+    pub fn draw_rack(&mut self, ui: &mut egui::Ui) {
+        let rail_width = 304.0;
+        let rail_height = 380.0;
+        let total_height = rail_height * 24.0;
 
-        // Check for clicks outside plugins to deselect
-        let mut clicked_outside = false;
-        if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
-            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                clicked_outside = self.plugin_manager.get_plugin_at_position(pos, 0.2).is_none();
-            }
-        }
-
-        if clicked_outside {
-            self.plugin_manager.deselect_all();
-        }
-
-        // Now handle the drawing
         if let Some(texture) = &self.rack_texture {
-            let rail_width = texture.size_vec2().x * self.zoom_level;
-            let rail_height = texture.size_vec2().y * self.zoom_level;
-            
-            let total_height = rail_height * 24.0;
-            
             egui::ScrollArea::both()
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                 .vertical_scroll_offset(0.0)
@@ -227,6 +192,13 @@ impl VcvRackApp {
                     ui.visuals_mut().widgets.hovered.bg_fill = egui::Color32::from_rgba_premultiplied(140, 140, 140, 180);
                     
                     ui.set_min_size(egui::vec2(rail_width * 200.0, total_height));
+
+                    let mut click_consumed = false;
+
+                    // Handle delete key press
+                    if ui.input(|i| i.key_pressed(egui::Key::Delete)) {
+                        self.plugin_manager.delete_selected_plugins();
+                    }
 
                     // First render all rails
                     for row in 0..24 {
@@ -244,22 +216,33 @@ impl VcvRackApp {
                             if ui.rect_contains_pointer(rail_rect) {
                                 if ui.input(|i| i.pointer.button_clicked(egui::PointerButton::Primary)) {
                                     if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                                        #[cfg(not(test))]
+                                        println!("Adding plugin at position: {:?}", pointer_pos);
+                                        
                                         // Calculate the grid position based on the actual click position
                                         let grid_x = (pointer_pos.x / (30.4 * self.zoom_level)).floor() * (30.4 * self.zoom_level);
                                         let plugin_pos = egui::pos2(grid_x, pos.y);
                                         
-                                        if let Some(texture) = &self.blank_plate_plugin_texture {
+                                        // Check if there's already a plugin at this position
+                                        if self.plugin_manager.get_plugin_at_position(plugin_pos, self.zoom_level).is_some() {
+                                            // If there's already a plugin, select it instead of trying to add a new one
+                                            self.plugin_manager.deselect_all();
+                                            self.plugin_manager.select_plugin(plugin_pos, self.zoom_level);
+                                        } else if let Some(texture) = &self.blank_plate_plugin_texture {
+                                            // If position is free, add a new plugin
+                                            self.plugin_manager.deselect_all();
                                             self.plugin_manager.add_plugin(plugin_pos, Some(texture.clone()));
                                         }
+                                        click_consumed = true;
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Draw all plugins
+                    // Always draw plugins, but pass click_consumed to control click handling
                     if self.blank_plate_plugin_texture.is_some() {
-                        self.plugin_manager.draw_plugins(ui, self.zoom_level);
+                        self.plugin_manager.draw_plugins(ui, self.zoom_level, click_consumed);
                     }
                 });
         }
