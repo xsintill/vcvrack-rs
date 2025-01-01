@@ -147,7 +147,8 @@ impl VcvRackApp {
                     }
                     ui.close_menu();
                 }
-                if ui.button("Load").clicked() {
+                let open_shortcut = egui::KeyboardShortcut::new(egui::Modifiers::CTRL, egui::Key::O);
+                if ui.add(egui::Button::new("Open").shortcut_text(ui.ctx().format_shortcut(&open_shortcut))).clicked() {
                     if let Ok(()) = self.load_rack_state("default") {
                         println!("Rack state loaded successfully");
                     }
@@ -442,6 +443,13 @@ impl eframe::App for VcvRackApp {
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S)) {
             if let Ok(()) = self.save_rack_state("default") {
                 println!("Rack state saved successfully");
+            }
+        }
+
+        // Handle Ctrl+O for opening
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O)) {
+            if let Ok(()) = self.load_rack_state("default") {
+                println!("Rack state loaded successfully");
             }
         }
     }
