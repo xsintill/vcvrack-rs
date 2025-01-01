@@ -64,26 +64,50 @@ impl VcvRackApp {
             egui::TextureOptions::default()
         );
 
-        Self {
+        let mut app = Self {
             fullscreen: false,
             rack_texture: Some(rack_texture),
             blank_plate_plugin_texture: Some(blank_plate_plugin_texture),
             zoom_level: 1.0,
             plugin_manager: PluginManager::new(),
             current_file: None,
+        };
+
+        // Try to load default.json on startup
+        if let Some(save_dir) = Self::get_save_directory() {
+            let default_file = save_dir.join("default.json");
+            if default_file.exists() {
+                if let Ok(()) = app.load_rack_state("default") {
+                    app.current_file = Some(default_file);
+                }
+            }
         }
+
+        app
     }
 
     #[cfg(test)]
     pub fn new_test(_ctx: &egui::Context) -> Self {
-        Self {
+        let mut app = Self {
             fullscreen: false,
             plugin_manager: PluginManager::new(),
             blank_plate_plugin_texture: None,
             zoom_level: 1.0,
             rack_texture: None,
             current_file: None,
+        };
+
+        // Try to load default.json on startup
+        if let Some(save_dir) = Self::get_save_directory() {
+            let default_file = save_dir.join("default.json");
+            if default_file.exists() {
+                if let Ok(()) = app.load_rack_state("default") {
+                    app.current_file = Some(default_file);
+                }
+            }
         }
+
+        app
     }
 
     pub fn toggle_fullscreen(&mut self, ctx: &egui::Context) {

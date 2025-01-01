@@ -7,4 +7,5 @@ pub mod tests {
     pub mod window_title_tests;
     pub mod plugin_tests;
     pub mod vcvrack_app_tests;
+    pub mod startup_tests;
 }
