@@ -4,8 +4,9 @@ My operating system is windows 10.
 Make sure any of the commands you are using is possible for windows(no linux or mac only commands).
 
 For any new or changed feature update the documentation
+For any new or changed feature update the tests
+After you are done run the tests
 
-Create tests or update the related tests for new code
 Dont mix code meant for tests in the normal code.
 
 Please keep files small and simple and create new code files if it makes sense
