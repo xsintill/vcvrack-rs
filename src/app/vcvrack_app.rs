@@ -139,6 +139,7 @@ impl VcvRackApp {
     fn update_menu(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
+                ui.set_min_width(200.0); // Match View menu width
                 if ui.button("Save").clicked() {
                     if let Ok(()) = self.save_rack_state("default") {
                         println!("Rack state saved successfully");
@@ -158,6 +159,7 @@ impl VcvRackApp {
             });
             
             ui.menu_button("View", |ui| {
+                ui.set_min_width(200.0); // Match File menu width
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::LEFT), |ui| {
                     let rect = egui::Rect::from_min_size(
                         ui.cursor().min,
