@@ -226,12 +226,21 @@ impl VcvRackApp {
                                         let ctrl_pressed = ui.input(|i| i.modifiers.ctrl);
                                         
                                         // Check if there's already a plugin at this position
-                                        if self.plugin_manager.get_plugin_at_position(plugin_pos, self.zoom_level).is_some() {
-                                            // If there's already a plugin, select it
+                                        if let Some(clicked_plugin) = self.plugin_manager.get_plugin_at_position(plugin_pos, self.zoom_level) {
+                                            // Store the selection state before modifying plugin manager
+                                            let was_selected = clicked_plugin.is_selected();
+                                            
+                                            // If there's already a plugin, handle selection/deselection
                                             if !ctrl_pressed {
+                                                // Normal click: deselect all others and toggle this one
                                                 self.plugin_manager.deselect_all();
+                                                if !was_selected {
+                                                    self.plugin_manager.select_plugin(plugin_pos, self.zoom_level);
+                                                }
+                                            } else {
+                                                // Ctrl+click: toggle this plugin's selection without affecting others
+                                                self.plugin_manager.select_plugin(plugin_pos, self.zoom_level);
                                             }
-                                            self.plugin_manager.select_plugin(plugin_pos, self.zoom_level);
                                         } else if let Some(texture) = &self.blank_plate_plugin_texture {
                                             // If position is free, add a new plugin
                                             self.plugin_manager.deselect_all();

@@ -659,4 +659,55 @@ mod gui_tests {
         assert_eq!(manager.get_plugins().len(), 1, "Should have 1 plugin after deletion");
         assert!(manager.get_plugin_at_position(pos3, TEST_ZOOM).is_some(), "Third plugin should still exist");
     }
+
+    #[test]
+    fn test_plugin_deselection_via_click() {
+        let (_ctx, mut manager, mock_textures) = create_test_context();
+        let pos = egui::pos2(100.0, 100.0);
+        
+        // Add and select a plugin
+        manager.add_plugin(pos, Some(mock_textures.blank_plate.clone()));
+        manager.select_plugin(pos, TEST_ZOOM);
+        
+        // Verify plugin is selected
+        let plugin = manager.get_plugin_at_position(pos, TEST_ZOOM).unwrap();
+        assert!(plugin.is_selected(), "Plugin should be selected initially");
+        
+        // Click on the selected plugin again (without Ctrl)
+        manager.select_plugin(pos, TEST_ZOOM);
+        
+        // Verify plugin is now deselected
+        let plugin = manager.get_plugin_at_position(pos, TEST_ZOOM).unwrap();
+        assert!(!plugin.is_selected(), "Plugin should be deselected after clicking again");
+    }
+
+    #[test]
+    fn test_plugin_deselection_via_ctrl_click() {
+        let (_ctx, mut manager, mock_textures) = create_test_context();
+        let pos1 = egui::pos2(100.0, 100.0);
+        let pos2 = egui::pos2(130.4, 100.0);
+        
+        // Add two plugins
+        manager.add_plugin(pos1, Some(mock_textures.blank_plate.clone()));
+        manager.add_plugin(pos2, Some(mock_textures.blank_plate.clone()));
+        
+        // Select both plugins with Ctrl+click
+        manager.select_plugin(pos1, TEST_ZOOM);
+        manager.select_plugin(pos2, TEST_ZOOM);
+        
+        // Verify both plugins are selected
+        let plugin1 = manager.get_plugin_at_position(pos1, TEST_ZOOM).unwrap();
+        let plugin2 = manager.get_plugin_at_position(pos2, TEST_ZOOM).unwrap();
+        assert!(plugin1.is_selected(), "First plugin should be selected initially");
+        assert!(plugin2.is_selected(), "Second plugin should be selected initially");
+        
+        // Ctrl+click on first plugin to deselect it
+        manager.select_plugin(pos1, TEST_ZOOM);
+        
+        // Verify first plugin is deselected but second remains selected
+        let plugin1 = manager.get_plugin_at_position(pos1, TEST_ZOOM).unwrap();
+        let plugin2 = manager.get_plugin_at_position(pos2, TEST_ZOOM).unwrap();
+        assert!(!plugin1.is_selected(), "First plugin should be deselected after Ctrl+click");
+        assert!(plugin2.is_selected(), "Second plugin should remain selected");
+    }
 }

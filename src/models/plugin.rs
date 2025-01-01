@@ -99,8 +99,12 @@ impl Plugin {
         self.selected = selected;
     }
 
-    #[cfg(test)]
     pub fn is_selected(&self) -> bool {
+        self.selected
+    }
+
+    #[cfg(test)]
+    pub fn is_selected_for_test(&self) -> bool {
         self.selected
     }
 
@@ -167,12 +171,10 @@ impl PluginManager {
 
     pub fn select_plugin(&mut self, pos: egui::Pos2, zoom_level: f32) {
         // First check if we clicked on any plugin
-        let clicked_on_plugin = self.get_plugin_at_position(pos, zoom_level).is_some();
-        
-        // If we clicked on a plugin, select it
-        if clicked_on_plugin {
+        if let Some(clicked_plugin) = self.get_plugin_at_position(pos, zoom_level) {
             if let Some(plugin) = self.plugins.iter_mut().find(|p| p.is_at_position(pos, zoom_level)) {
-                plugin.set_selected(true);
+                // Toggle selection if clicking on a selected plugin
+                plugin.set_selected(!plugin.is_selected());
             }
         } else {
             // If we clicked outside any plugin, deselect all
