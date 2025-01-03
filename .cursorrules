@@ -1,0 +1,17 @@
+Always begin your response with "Sure Luc"
+
+My operating system is windows 10. 
+Make sure any of the commands you are using is possible for windows(no linux or mac only commands).
+
+Dont mix code meant for tests in the normal code.
+
+Please keep files small and simple and create new code files if it makes sense
+
+Project:
+dont add space between plugins
+
+Workflow:
+1. For any new or changed feature update the documentation
+2. For any new or changed feature update the tests
+3. After you are done run the tests
+4. If all tests pass start run app

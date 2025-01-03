@@ -1,3 +1,9 @@
+[config]
+skip_core_tasks = true
+
+[tasks.init]
+description = "Initialize development environment"
+
 [tasks.generate-coverage]
 description = "Generate code coverage report"
 command = "cargo"
@@ -11,29 +17,34 @@ args = ["/c", "start", "target\\llvm-cov\\html\\index.html"]
 
 [tasks.coverage]
 description = "Generate and open code coverage report"
-dependencies = ["generate-coverage", "open-coverage"]
+dependencies = ["init", "generate-coverage", "open-coverage"]
 
 [tasks.test-watch]
 description = "Run tests and watch for changes"
+dependencies = ["init"]
 command = "cargo"
 args = ["watch", "-x", "test"]
 
 [tasks.build-release]
 description = "Build with optimizations"
+dependencies = ["init"]
 command = "cargo"
 args = ["build", "--release"]
 
 [tasks.fmt]
 description = "Format code"
+dependencies = ["init"]
 command = "cargo"
 args = ["fmt", "--all"]
 
 [tasks.fmt-check]
 description = "Check code formatting"
+dependencies = ["init"]
 command = "cargo"
 args = ["fmt", "--all", "--", "--check"]
 
 [tasks.lint]
 description = "Run clippy lints"
+dependencies = ["init"]
 command = "cargo"
 args = ["clippy", "--", "-D", "warnings"]
