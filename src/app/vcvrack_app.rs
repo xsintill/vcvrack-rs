@@ -1,4 +1,5 @@
 use crate::models::plugin::{PluginManager, RackState};
+use crate::models::history::History;
 use eframe::egui;
 use std::path::PathBuf;
 use directories::ProjectDirs;
@@ -14,6 +15,7 @@ pub struct VcvRackApp {
     pub plugin_manager: PluginManager,
     pub current_file: Option<PathBuf>,
     pub has_unsaved_changes: bool,
+    pub history: History,
 }
 
 #[allow(dead_code)]  // Temporarily allow dead code until we implement the UI
@@ -74,7 +76,11 @@ impl VcvRackApp {
             plugin_manager: PluginManager::new(),
             current_file: None,
             has_unsaved_changes: false,
+            history: History::new(),
         };
+
+        // Push initial empty state
+        app.history.push_state(app.plugin_manager.save_state());
 
         // Try to load default.json on startup
         if let Some(save_dir) = Self::get_save_directory() {
@@ -99,17 +105,11 @@ impl VcvRackApp {
             rack_texture: None,
             current_file: None,
             has_unsaved_changes: false,
+            history: History::new(),
         };
 
-        // Try to load default.json on startup
-        if let Some(save_dir) = Self::get_save_directory() {
-            let default_file = save_dir.join("default.json");
-            if default_file.exists() {
-                if let Ok(()) = app.load_rack_state("default") {
-                    app.current_file = Some(default_file);
-                }
-            }
-        }
+        // Push initial empty state
+        app.history.push_state(app.plugin_manager.save_state());
 
         app
     }
@@ -179,6 +179,20 @@ impl VcvRackApp {
                 ui.separator();
                 if ui.button("Exit").clicked() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+            
+            ui.menu_button("Edit", |ui| {
+                let undo_enabled = self.history.can_undo();
+                if ui.add_enabled(undo_enabled, egui::Button::new("Undo").shortcut_text("Ctrl+Z")).clicked() {
+                    self.undo();
+                    ui.close_menu();
+                }
+
+                let redo_enabled = self.history.can_redo();
+                if ui.add_enabled(redo_enabled, egui::Button::new("Redo").shortcut_text("Ctrl+Y")).clicked() {
+                    self.redo();
+                    ui.close_menu();
                 }
             });
             
@@ -269,6 +283,11 @@ impl VcvRackApp {
                     // Handle delete key press
                     if ui.input(|i| i.key_pressed(egui::Key::Delete)) {
                         if !self.plugin_manager.get_selected_plugins().is_empty() {
+                            // Save current state before deletion
+                            let current_state = self.plugin_manager.save_state();
+                            self.history.push_state(current_state);
+                            
+                            // Now delete the plugins
                             self.plugin_manager.delete_selected_plugins();
                             self.has_unsaved_changes = true;
                         }
@@ -320,6 +339,7 @@ impl VcvRackApp {
                                             self.plugin_manager.deselect_all();
                                             self.plugin_manager.add_plugin(plugin_pos, Some(texture.clone()));
                                             self.has_unsaved_changes = true;
+                                            self.history.push_state(self.plugin_manager.save_state());
                                         }
                                         click_consumed = true;
                                     }
@@ -330,7 +350,18 @@ impl VcvRackApp {
 
                     // Always draw plugins, but pass click_consumed to control click handling
                     if self.blank_plate_plugin_texture.is_some() {
+                        // Save current state before any potential deletions
+                        let current_state = self.plugin_manager.save_state();
+                        let plugin_count_before = self.plugin_manager.plugin_count();
+                        
                         self.plugin_manager.draw_plugins(ui, self.zoom_level, click_consumed);
+                        
+                        // If plugin count changed (indicating deletion)
+                        let plugin_count_after = self.plugin_manager.plugin_count();
+                        if plugin_count_before != plugin_count_after {
+                            self.history.push_state(current_state);
+                            self.has_unsaved_changes = true;
+                        }
                     }
                 });
         }
@@ -340,12 +371,14 @@ impl VcvRackApp {
         if let Some(texture) = &self.blank_plate_plugin_texture {
             self.plugin_manager.add_plugin(pos, Some(texture.clone()));
             self.has_unsaved_changes = true;
+            self.history.push_state(self.plugin_manager.save_state());
         }
     }
 
     pub fn delete_plugin(&mut self, pos: egui::Pos2) {
         self.plugin_manager.delete_plugin(pos, self.zoom_level);
         self.has_unsaved_changes = true;
+        self.history.push_state(self.plugin_manager.save_state());
     }
 
     pub fn get_plugins(&self) -> Vec<egui::Pos2> {
@@ -368,6 +401,34 @@ impl VcvRackApp {
     #[cfg(test)]
     pub fn get_blank_plate_plugin_texture(&self) -> Option<&egui::TextureHandle> {
         self.blank_plate_plugin_texture.as_ref()
+    }
+
+    fn undo(&mut self) {
+        #[cfg(not(test))]
+        println!("Invoking undo");
+        if let Some(state) = self.history.undo() {
+            #[cfg(not(test))]
+            let old_count = self.plugin_manager.get_plugins().len();
+            self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
+            #[cfg(not(test))]
+            let new_count = self.plugin_manager.get_plugins().len();
+            #[cfg(not(test))]
+            println!("Undo: Plugin count changed from {} to {}", old_count, new_count);
+            self.has_unsaved_changes = true;
+        }
+    }
+
+    fn redo(&mut self) {
+        if let Some(state) = self.history.redo() {
+            #[cfg(not(test))]
+            let old_count = self.plugin_manager.get_plugins().len();
+            self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
+            #[cfg(not(test))]
+            let new_count = self.plugin_manager.get_plugins().len();
+            #[cfg(not(test))]
+            println!("Redo: Plugin count changed from {} to {}", old_count, new_count);
+            self.has_unsaved_changes = true;
+        }
     }
 
     pub fn get_save_directory() -> Option<PathBuf> {
@@ -494,6 +555,16 @@ impl eframe::App for VcvRackApp {
             if let Ok(()) = self.load_rack_state("default") {
                 println!("Rack state loaded successfully");
             }
+        }
+
+        // Handle Ctrl+Z for undo
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z)) {
+            self.undo();
+        }
+
+        // Handle Ctrl+Y for redo
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) {
+            self.redo();
         }
     }
 }

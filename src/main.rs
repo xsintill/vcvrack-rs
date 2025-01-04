@@ -4,6 +4,7 @@ mod models;
 use app::VcvRackApp;
 
 fn main() -> eframe::Result<()> {
+    env_logger::init();
     let native_options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_maximized(true)
