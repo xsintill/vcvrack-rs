@@ -3,8 +3,8 @@ use log::debug;
 
 #[derive(Debug)]
 pub struct History {
-    states: Vec<RackState>,
-    current_index: usize,
+    pub states: Vec<RackState>,
+    pub current_index: usize,
 }
 
 impl History {

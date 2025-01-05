@@ -350,16 +350,20 @@ impl VcvRackApp {
 
                     // Always draw plugins, but pass click_consumed to control click handling
                     if self.blank_plate_plugin_texture.is_some() {
-                        // Save current state before any potential deletions
-                        let current_state = self.plugin_manager.save_state();
-                        let plugin_count_before = self.plugin_manager.plugin_count();
+                        let (position_changed, drag_stopped) = self.plugin_manager.draw_plugins(ui, self.zoom_level, click_consumed);
+                        println!("draw_rack: position_changed={}, drag_stopped={}", position_changed, drag_stopped);
                         
-                        self.plugin_manager.draw_plugins(ui, self.zoom_level, click_consumed);
-                        
-                        // If plugin count changed (indicating deletion)
-                        let plugin_count_after = self.plugin_manager.plugin_count();
-                        if plugin_count_before != plugin_count_after {
-                            self.history.push_state(current_state);
+                        // Push state if position changed AND drag just stopped
+                        if position_changed && drag_stopped {
+                            // Save state after drag
+                            let dragged_state = self.plugin_manager.save_state();
+                            println!("Dragged state (current_index={}, states.len={}):", 
+                                self.history.current_index, self.history.states.len());
+                            println!("  plugins: {:?}", dragged_state.plugins);
+                            println!("  next_id: {}", dragged_state.next_id);
+                            self.history.push_state(dragged_state);
+                            println!("After push: current_index={}, states.len={}", 
+                                self.history.current_index, self.history.states.len());
                             self.has_unsaved_changes = true;
                         }
                     }
@@ -369,9 +373,24 @@ impl VcvRackApp {
 
     pub fn add_plugin(&mut self, pos: egui::Pos2) {
         if let Some(texture) = &self.blank_plate_plugin_texture {
+            // Save empty state
+            let empty_state = self.plugin_manager.save_state();
+            println!("Empty state:");
+            println!("  plugins: {:?}", empty_state.plugins);
+            println!("  next_id: {}", empty_state.next_id);
+            self.history.push_state(empty_state);
+            
+            // Add plugin
             self.plugin_manager.add_plugin(pos, Some(texture.clone()));
+            
+            // Save state with plugin
+            let plugin_state = self.plugin_manager.save_state();
+            println!("Plugin state:");
+            println!("  plugins: {:?}", plugin_state.plugins);
+            println!("  next_id: {}", plugin_state.next_id);
+            self.history.push_state(plugin_state);
+            
             self.has_unsaved_changes = true;
-            self.history.push_state(self.plugin_manager.save_state());
         }
     }
 
@@ -404,28 +423,27 @@ impl VcvRackApp {
     }
 
     fn undo(&mut self) {
-        #[cfg(not(test))]
         println!("Invoking undo");
         if let Some(state) = self.history.undo() {
-            #[cfg(not(test))]
-            let old_count = self.plugin_manager.get_plugins().len();
+            println!("Undoing to state:");
+            println!("  plugins: {:?}", state.plugins);
+            println!("  next_id: {}", state.next_id);
+            println!("  current_index: {}", self.history.current_index);
+            println!("  states.len: {}", self.history.states.len());
+            
+            let plugin_count_before = self.plugin_manager.plugin_count();
             self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
-            #[cfg(not(test))]
-            let new_count = self.plugin_manager.get_plugins().len();
-            #[cfg(not(test))]
-            println!("Undo: Plugin count changed from {} to {}", old_count, new_count);
+            let plugin_count_after = self.plugin_manager.plugin_count();
+            println!("Undo: Plugin count changed from {} to {}", plugin_count_before, plugin_count_after);
             self.has_unsaved_changes = true;
         }
     }
 
     fn redo(&mut self) {
         if let Some(state) = self.history.redo() {
-            #[cfg(not(test))]
             let old_count = self.plugin_manager.get_plugins().len();
             self.plugin_manager.load_state(state, self.blank_plate_plugin_texture.clone());
-            #[cfg(not(test))]
             let new_count = self.plugin_manager.get_plugins().len();
-            #[cfg(not(test))]
             println!("Redo: Plugin count changed from {} to {}", old_count, new_count);
             self.has_unsaved_changes = true;
         }

@@ -8,6 +8,8 @@ pub struct Plugin {
     pub position: egui::Pos2,
     pub selected: bool,
     pub id: usize,
+    pub is_being_dragged: bool,
+    pub drag_start_position: Option<egui::Pos2>, // Track where drag started
 }
 
 impl std::fmt::Debug for Plugin {
@@ -45,7 +47,7 @@ impl<'de> Deserialize<'de> for Plugin {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PluginState {
     pub x: f32,
     pub y: f32,
@@ -53,9 +55,10 @@ pub struct PluginState {
     pub id: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RackState {
     pub plugins: Vec<PluginState>,
+    pub next_id: usize,
 }
 
 impl Plugin {
@@ -76,6 +79,8 @@ impl Plugin {
             texture,
             selected: false,  // Explicitly set to false
             id,
+            is_being_dragged: false,
+            drag_start_position: None,
         }
     }
 
@@ -106,16 +111,55 @@ impl Plugin {
         plugin_grid_x == target_grid_x && plugin_grid_y == target_grid_y
     }
 
-    pub fn draw(&self, ui: &mut egui::Ui, zoom_level: f32) -> (egui::Response, Option<usize>) {
+    pub fn draw(&mut self, ui: &mut egui::Ui, zoom_level: f32) -> (egui::Response, Option<usize>, bool, bool) {
         let mut delete_id = None;
-        let mut response = ui.allocate_response(egui::Vec2::ZERO, egui::Sense::click());
+        let mut position_changed = false;
+        let mut drag_stopped = false;
         
         if let Some(texture) = &self.texture {
             let size = texture.size_vec2() / zoom_level;
             let rect = egui::Rect::from_min_size(self.position, size);
             
-            // First allocate the response for the entire plugin area
-            response = ui.allocate_rect(rect, egui::Sense::click());
+            // First allocate the response for the entire plugin area with drag sensing
+            let response = ui.allocate_rect(rect, egui::Sense::drag());
+            
+            // Handle dragging
+            if response.dragged() {
+                println!("Plugin {} being dragged", self.id);
+                if let Some(pointer_pos) = ui.input(|i| i.pointer.interact_pos()) {
+                    // On drag start, save the initial position
+                    if !self.is_being_dragged {
+                        println!("Plugin {} drag started at {:?}", self.id, self.position);
+                        self.drag_start_position = Some(self.position);
+                        self.is_being_dragged = true;
+                    }
+                    
+                    // Calculate grid position
+                    let grid_x = (pointer_pos.x / (30.4 * zoom_level)).floor() * (30.4 * zoom_level);
+                    let grid_y = self.position.y; // Keep same row
+                    let new_pos = egui::pos2(grid_x, grid_y);
+                    
+                    if new_pos != self.position {
+                        println!("Plugin {} position changed from {:?} to {:?}", self.id, self.position, new_pos);
+                        self.position = new_pos;
+                        position_changed = true;
+                    }
+                }
+            } else if response.drag_released() {
+                // Only set drag_stopped if we were actually dragging
+                if self.is_being_dragged {
+                    println!("Plugin {} drag released", self.id);
+                    self.is_being_dragged = false;
+                    // Check if position changed from start
+                    if let Some(start_pos) = self.drag_start_position {
+                        position_changed = start_pos != self.position;
+                        drag_stopped = true;
+                        println!("Plugin {} drag_stopped=true, position_changed={} (start_pos={:?}, current_pos={:?})", 
+                            self.id, position_changed, start_pos, self.position);
+                    }
+                    self.drag_start_position = None;
+                }
+            }
             
             // Then draw the plugin texture
             let mut mesh = egui::Mesh::with_texture(texture.id());
@@ -128,7 +172,7 @@ impl Plugin {
             });
             
             ui.painter().add(mesh);
-
+            
             // Handle context menu
             response.context_menu(|ui| {
                 if ui.button("Delete").clicked() {
@@ -137,13 +181,10 @@ impl Plugin {
                 }
             });
             
-            #[cfg(not(test))]
-            if response.clicked() {
-                println!("Plugin {} clicked", self.id);
-            }
+            (response, delete_id, position_changed, drag_stopped)
+        } else {
+            (ui.allocate_response(egui::Vec2::ZERO, egui::Sense::click()), None, false, false)
         }
-        
-        (response, delete_id)
     }
 
     pub fn set_selected(&mut self, selected: bool) {
@@ -179,6 +220,8 @@ impl Plugin {
             position: egui::pos2(state.x, state.y),
             selected: state.selected,
             id: state.id,
+            is_being_dragged: false,
+            drag_start_position: None,
         }
     }
 }
@@ -197,39 +240,22 @@ impl PluginManager {
     }
 
     pub fn add_plugin(&mut self, position: egui::Pos2, texture: Option<egui::TextureHandle>) {
-        const GRID_UNIT: f32 = 15.2;
-        const RAIL_HEIGHT: f32 = 380.0;
+        println!("Adding plugin at position: {:?}", position);
         
-        let relative_x = position.x - 100.0;
-        let grid_index = if relative_x <= 0.0 {
-            0
-        } else {
-            (relative_x / GRID_UNIT).round() as i32
-        };
-
-        let grid_x = 100.0 + (grid_index as f32 * GRID_UNIT);
-        let rail_index = ((position.y - 100.0) / RAIL_HEIGHT).round() as i32;
-        let grid_y = 100.0 + (rail_index as f32 * RAIL_HEIGHT);
-
-        // Check for existing plugins using grid position
-        for plugin in &self.plugins {
-            if plugin.is_at_grid_position(grid_x, grid_y) {
-                #[cfg(not(test))]
-                println!("Cannot add plugin: grid position already occupied on this rail");
-                return;
-            }
+        // Calculate grid position
+        let grid_x = (position.x / 30.4).floor() * 30.4;
+        let grid_y = 0.0; // Always place at top
+        let grid_pos = egui::pos2(grid_x, grid_y);
+        
+        println!("Looking for plugin at pos: {:?}", grid_pos);
+        
+        // Check if there's already a plugin at this position
+        if !self.plugins.iter().any(|p| p.is_at_grid_position(grid_x, grid_y)) {
+            let plugin = Plugin::new(grid_pos, texture, self.next_id);
+            self.next_id += 1;
+            self.plugins.push(plugin);
+            println!("Added plugin at position: {:?}", grid_pos);
         }
-
-        let id = self.next_id;
-        self.next_id += 1;
-
-        // Create new plugin and ensure it's not selected
-        let mut new_plugin = Plugin::new(position, texture, id);
-        new_plugin.set_selected(false);
-        self.plugins.push(new_plugin);
-
-        #[cfg(not(test))]
-        println!("Added plugin at position: {:?}", position);
     }
 
     pub fn delete_plugin(&mut self, pos: egui::Pos2, zoom_level: f32) {
@@ -281,42 +307,32 @@ impl PluginManager {
         self.plugins.is_empty()
     }
 
-    pub fn draw_plugins(&mut self, ui: &mut egui::Ui, zoom_level: f32, ignore_clicks: bool) {
+    pub fn draw_plugins(&mut self, ui: &mut egui::Ui, zoom_level: f32, click_consumed: bool) -> (bool, bool) {
+        let mut any_position_changed = false;
+        let mut any_drag_stopped = false;
         let mut plugins_to_delete = Vec::new();
-        let mut plugin_to_toggle: Option<usize> = None;
-        
-        // First pass: Draw plugins and collect actions
-        for plugin in self.plugins.iter_mut() {
-            let (response, delete_id) = plugin.draw(ui, zoom_level);
+
+        for plugin in &mut self.plugins {
+            let (response, delete_id, position_changed, drag_stopped) = plugin.draw(ui, zoom_level);
+            println!("Plugin draw result: position_changed={}, drag_stopped={}", position_changed, drag_stopped);
             
-            // Handle selection on click, but only if we're not ignoring clicks
-            if !ignore_clicks && response.clicked() {
-                #[cfg(not(test))]
-                println!("Click detected on plugin {}", plugin.id);
-                plugin_to_toggle = Some(plugin.id);
+            if position_changed {
+                any_position_changed = true;
             }
-            
+            if drag_stopped {
+                any_drag_stopped = true;
+            }
+
             if let Some(id) = delete_id {
                 plugins_to_delete.push(id);
             }
         }
-        
-        // Second pass: Handle selection changes
-        if let Some(toggle_id) = plugin_to_toggle {
-            #[cfg(not(test))]
-            println!("Toggling plugin {}", toggle_id);
-            // First deselect all plugins
-            for plugin in self.plugins.iter_mut() {
-                plugin.set_selected(false);
-            }
-            // Then select the clicked plugin
-            if let Some(plugin) = self.plugins.iter_mut().find(|p| p.id == toggle_id) {
-                plugin.set_selected(true);
-            }
-        }
-        
-        // Finally: Remove deleted plugins
-        self.plugins.retain(|plugin| !plugins_to_delete.contains(&plugin.id));
+
+        // Remove any plugins marked for deletion
+        self.plugins.retain(|p| !plugins_to_delete.contains(&p.id));
+
+        println!("draw_plugins result: any_position_changed={}, any_drag_stopped={}", any_position_changed, any_drag_stopped);
+        (any_position_changed, any_drag_stopped)
     }
 
     pub fn delete_selected_plugins(&mut self) {
@@ -326,19 +342,16 @@ impl PluginManager {
     pub fn save_state(&self) -> RackState {
         RackState {
             plugins: self.plugins.iter().map(|p| p.to_state()).collect(),
+            next_id: self.next_id,
         }
     }
 
     pub fn load_state(&mut self, state: RackState, texture: Option<egui::TextureHandle>) {
-        let plugins_len = state.plugins.len();
-        self.plugins = state.plugins.into_iter()
-            .map(|p| {
-                let mut plugin = Plugin::from_state(p, texture.clone());
-                plugin.selected = false;  // Ensure all plugins are deselected when loading
-                plugin
-            })
-            .collect();
-        self.next_id = self.next_id.max(plugins_len);
+        self.plugins.clear();
+        for plugin_state in state.plugins {
+            self.plugins.push(Plugin::from_state(plugin_state, texture.clone()));
+        }
+        self.next_id = state.next_id;
     }
 
     pub fn get_selected_plugins(&self) -> Vec<&Plugin> {
