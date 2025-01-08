@@ -17,6 +17,7 @@ rfd = "0.12"
 log = "0.4"
 env_logger = "0.10"
 cpal = "0.15.3"
+anyhow = "1.0"
 
 [target.'cfg(windows)'.dependencies]
 windows = "0.58.0"
