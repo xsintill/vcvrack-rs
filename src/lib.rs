@@ -1,5 +1,6 @@
 pub mod app;
 pub mod models;
+pub mod audio;
 
 #[cfg(test)]
 pub mod tests {
