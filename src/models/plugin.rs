@@ -98,17 +98,7 @@ impl Plugin {
     }
 
     pub fn is_at_grid_position(&self, grid_x: f32, grid_y: f32) -> bool {
-        const GRID_UNIT: f32 = 15.2;
-        const RAIL_HEIGHT: f32 = 380.0;
-        
-        let plugin_relative_x = self.position.x - 100.0;
-        let plugin_grid_x = (plugin_relative_x / GRID_UNIT).round() as i32;
-        let plugin_grid_y = ((self.position.y - 100.0) / RAIL_HEIGHT).round() as i32;
-        
-        let target_grid_x = ((grid_x - 100.0) / GRID_UNIT).round() as i32;
-        let target_grid_y = ((grid_y - 100.0) / RAIL_HEIGHT).round() as i32;
-        
-        plugin_grid_x == target_grid_x && plugin_grid_y == target_grid_y
+        (self.position.x - grid_x).abs() < 0.1 && (self.position.y - grid_y).abs() < 0.1
     }
 
     pub fn draw(&mut self, ui: &mut egui::Ui, zoom_level: f32) -> (egui::Response, Option<usize>, bool, bool) {
@@ -136,7 +126,7 @@ impl Plugin {
                     
                     // Calculate grid position
                     let grid_x = (pointer_pos.x / (30.4 * zoom_level)).floor() * (30.4 * zoom_level);
-                    let grid_y = self.position.y; // Keep same row
+                    let grid_y = (pointer_pos.y / (380.0 * zoom_level)).floor() * (380.0 * zoom_level);
                     let new_pos = egui::pos2(grid_x, grid_y);
                     
                     if new_pos != self.position {
@@ -244,7 +234,7 @@ impl PluginManager {
         
         // Calculate grid position
         let grid_x = (position.x / 30.4).floor() * 30.4;
-        let grid_y = 0.0; // Always place at top
+        let grid_y = (position.y / 380.0).floor() * 380.0;
         let grid_pos = egui::pos2(grid_x, grid_y);
         
         println!("Looking for plugin at pos: {:?}", grid_pos);
